@@ -12,9 +12,6 @@ import os
 import pandas as pd
 from PIL import Image
 import time
-import streamlit.components.v1 as components
-import base64
-import io
 
 # Page config
 st.set_page_config(
@@ -33,66 +30,14 @@ if 'embeddings' not in st.session_state:
 if 'names' not in st.session_state:
     st.session_state.names = None
 
-def auto_camera_capture_component(num_photos=50):
-    """Create an auto-capture camera component"""
-    
-    html_code = f"""
-    <div id="camera-container">
-        <video id="video" width="640" height="480" autoplay style="border: 2px solid #4CAF50; border-radius: 10px;"></video>
-        <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
-        <div id="status" style="margin-top: 10px; font-size: 18px; font-weight: bold;">
-            Photos captured: <span id="count">0</span>/{num_photos}
-        </div>
-        <div id="message" style="margin-top: 10px; color: #4CAF50; font-size: 16px;"></div>
-    </div>
+# Page config
+st.set_page_config(
+    page_title="Face Recognition Attendance System",
+    page_icon="📸",
+    layout="wide"
+)
 
-    <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-    const countSpan = document.getElementById('count');
-    const message = document.getElementById('message');
-    
-    let captureCount = 0;
-    const maxPhotos = {num_photos};
-    let capturedImages = [];
-    
-    navigator.mediaDevices.getUserMedia({{ video: {{ facingMode: 'user', width: 640, height: 480 }} }})
-        .then(stream => {{
-            video.srcObject = stream;
-            message.textContent = '✓ Camera ready! Auto-capturing starts in 2 seconds...';
-            setTimeout(() => startAutoCapture(), 2000);
-        }})
-        .catch(err => {{
-            message.textContent = '✗ Camera error: ' + err.message;
-            message.style.color = '#f44336';
-        }});
-    
-    function startAutoCapture() {{
-        const interval = setInterval(() => {{
-            if (captureCount >= maxPhotos) {{
-                clearInterval(interval);
-                message.textContent = '🎉 Complete! Processing...';
-                return;
-            }}
-            
-            context.drawImage(video, 0, 0, 640, 480);
-            capturedImages.push(canvas.toDataURL('image/jpeg', 0.85));
-            captureCount++;
-            countSpan.textContent = captureCount;
-            message.textContent = 'Capturing... Vary your pose slightly!';
-        }}, 200);
-    }}
-    </script>
-    
-    <style>
-    #camera-container {{ text-align: center; padding: 20px; background: #f5f5f5; border-radius: 15px; }}
-    </style>
-    """
-    
-    return components.html(html_code, height=650)
-
-# Constants
+# Initialize session state
 dataset_path = 'dataset'
 cache_file = 'face_encodings_cache.pkl'
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -459,62 +404,58 @@ with tab3:
                 else:
                     st.error("Please enter a person name")
         else:
-            st.info("📱 **Mobile/Cloud Mode:** Camera will automatically capture 50 photos!")
+            st.info("📱 **Mobile/Cloud Mode:** Quick capture - 50 photos with minimal clicks!")
             
-            if person_name and st.button("📸 Start Auto-Capture (50 photos)", use_container_width=True, type="primary"):
-                st.session_state.auto_capture_started = True
+            # Simplified capture mode
+            if person_name and st.button("📸 Start Quick Capture (50 photos)", use_container_width=True, type="primary"):
+                person_dir = os.path.join(dataset_path, person_name)
+                os.makedirs(person_dir, exist_ok=True)
+                st.session_state.capture_mode = True
+                st.session_state.capture_count = 0
                 st.session_state.person_name = person_name
                 st.rerun()
             
-            if st.session_state.get('auto_capture_started', False):
-                person_name = st.session_state.get('person_name', '')
-                person_dir = os.path.join(dataset_path, person_name)
-                os.makedirs(person_dir, exist_ok=True)
-                
-                st.markdown("### 🎥 Auto-Capture in Progress")
-                st.info("📱 Keep your face in view. The app will automatically take 50 photos in 10 seconds!")
-                
-                # Show the auto-capture component
-                result = auto_camera_capture_component(50)
-                
-                # Note: In actual implementation, you'd need to handle the returned images
-                # For now, show manual capture as fallback
-                if st.button("Skip Auto-Capture (Use Manual)", use_container_width=True):
-                    st.session_state.auto_capture_started = False
-                    st.session_state.capture_mode = True
-                    st.session_state.capture_count = 0
-                    st.rerun()
-            
-            # Manual fallback mode
-            if st.session_state.get('capture_mode', False) and not st.session_state.get('auto_capture_started', False):
+            if st.session_state.get('capture_mode', False):
                 capture_count = st.session_state.get('capture_count', 0)
                 person_name = st.session_state.get('person_name', '')
                 person_dir = os.path.join(dataset_path, person_name)
                 
-                st.progress(capture_count / 50)
-                st.write(f"📸 Photos captured: {capture_count}/50")
+                st.progress(capture_count / 50, text=f"Progress: {capture_count}/50 photos")
                 
                 if capture_count < 50:
-                    st.info(f"Keep taking photos! {50 - capture_count} remaining.")
-                    img_file = st.camera_input(f"Photo #{capture_count + 1}", key=f"camera_{capture_count}")
+                    # Auto-submit hack: use a unique key that changes each time
+                    img_file = st.camera_input(
+                        f"📸 Photo {capture_count + 1}/50 - Just keep clicking!", 
+                        key=f"cam_{capture_count}_{person_name}"
+                    )
                     
                     if img_file is not None:
+                        # Save immediately
                         image = Image.open(img_file)
                         img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
-                        image.save(img_path)
+                        image.save(img_path, quality=85, optimize=True)
+                        
+                        # Update counter and rerun immediately
                         st.session_state.capture_count += 1
-                        time.sleep(0.3)
+                        
+                        # Show success briefly
+                        if capture_count % 10 == 0:
+                            st.success(f"✅ {capture_count + 1} photos saved!")
+                        
                         st.rerun()
                 else:
-                    st.success(f"✅ Successfully captured 50 photos for {person_name}!")
+                    st.success(f"🎉 All 50 photos captured for {person_name}!")
                     st.balloons()
-                    st.info("Refreshing face encodings...")
+                    
+                    # Reset and refresh
                     st.session_state.embeddings = None
                     st.session_state.capture_mode = False
                     st.session_state.capture_count = 0
-                    st.session_state.auto_capture_started = False
-                    time.sleep(2)
-                    st.rerun()
+                    
+                    st.info("✅ Face encodings will be refreshed. Go to 'Live Recognition' tab!")
+                    
+                    if st.button("🔄 Start Fresh Recognition", type="primary"):
+                        st.rerun()
     
     with col2:
         is_local = not os.path.exists('/mount/src')
@@ -535,20 +476,19 @@ with tab3:
             """)
         else:
             st.info("""
-            **Mobile Instructions:**
+            **Mobile Quick Capture:**
             1. Enter the person's name
-            2. Click 'Start Auto-Capture'
-            3. Allow camera access when prompted
-            4. Keep your face centered in the video
-            5. **Camera will automatically take 50 photos in 10 seconds!**
-            6. Slightly move your head during capture for variety
-            7. System will process and save all photos automatically
+            2. Click 'Start Quick Capture'
+            3. Take photo → Click "Use Photo" → Repeat
+            4. Photos save instantly (no processing delay)
+            5. Progress bar shows your count
+            6. After 50 photos, system auto-refreshes!
             
-            **Tips:**
-            - Good lighting is essential
-            - Keep face clearly visible
-            - Natural expressions work best
-            - If auto-capture fails, use manual mode as fallback
+            **Speed Tips:**
+            - Photos save immediately, no waiting
+            - Vary your pose slightly between shots
+            - Keep clicking through quickly
+            - Should take ~2-3 minutes for all 50
             """)
         
         if not st.session_state.get('capture_mode', False):
