@@ -12,6 +12,10 @@ import os
 import pandas as pd
 from PIL import Image
 import time
+import streamlit.components.v1 as components
+import base64
+import zipfile
+import io
 
 # Page config
 st.set_page_config(
@@ -19,6 +23,79 @@ st.set_page_config(
     page_icon="📸",
     layout="wide"
 )
+
+def create_auto_capture_html(person_name, num_photos=50):
+    """Create HTML/JS for automatic photo capture"""
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial; text-align: center; padding: 20px; background: #f5f5f5; }}
+            #video {{ border: 3px solid #4CAF50; border-radius: 10px; }}
+            .status {{ font-size: 24px; margin: 20px; font-weight: bold; }}
+            canvas {{ display: none; }}
+        </style>
+    </head>
+    <body>
+        <h2>📸 Auto-Capturing for {person_name}</h2>
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+        <div class="status">Photos: <span id="count">0</span>/{num_photos}</div>
+        <div id="message" style="font-size: 18px; color: #2196F3;">Starting...</div>
+        <div id="download"></div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+        <script>
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            let count = 0;
+            const maxPhotos = {num_photos};
+            const photos = [];
+            
+            navigator.mediaDevices.getUserMedia({{ video: {{ facingMode: 'user' }} }})
+                .then(stream => {{
+                    video.srcObject = stream;
+                    document.getElementById('message').textContent = 'Starting in 2 seconds...';
+                    setTimeout(startCapture, 2000);
+                }});
+            
+            function startCapture() {{
+                document.getElementById('message').textContent = 'Capturing...';
+                const interval = setInterval(() => {{
+                    if (count >= maxPhotos) {{
+                        clearInterval(interval);
+                        finish();
+                        return;
+                    }}
+                    ctx.drawImage(video, 0, 0, 640, 480);
+                    canvas.toBlob(blob => photos.push(blob), 'image/jpeg', 0.85);
+                    count++;
+                    document.getElementById('count').textContent = count;
+                }}, 150);
+            }}
+            
+            async function finish() {{
+                video.srcObject.getTracks()[0].stop();
+                document.getElementById('message').textContent = 'Creating ZIP...';
+                
+                const zip = new JSZip();
+                photos.forEach((blob, i) => {{
+                    zip.file('{person_name}_' + (i+1) + '.jpg', blob);
+                }});
+                
+                const zipBlob = await zip.generateAsync({{type: 'blob'}});
+                const url = URL.createObjectURL(zipBlob);
+                
+                document.getElementById('download').innerHTML = 
+                    '<a href="' + url + '" download="{person_name}_photos.zip" style="background:#4CAF50;color:white;padding:15px 30px;text-decoration:none;border-radius:5px;font-size:18px;">📥 Download ZIP</a>';
+                document.getElementById('message').textContent = '✅ Ready! Click to download';
+            }}
+        </script>
+    </body>
+    </html>
+    """
 
 # Initialize session state
 if 'recognition_active' not in st.session_state:
@@ -404,58 +481,105 @@ with tab3:
                 else:
                     st.error("Please enter a person name")
         else:
-            st.info("📱 **Mobile/Cloud Mode:** Quick capture - 50 photos with minimal clicks!")
+            st.info("📱 **Mobile/Cloud Mode:** Choose your capture method")
             
-            # Simplified capture mode
-            if person_name and st.button("📸 Start Quick Capture (50 photos)", use_container_width=True, type="primary"):
-                person_dir = os.path.join(dataset_path, person_name)
-                os.makedirs(person_dir, exist_ok=True)
-                st.session_state.capture_mode = True
-                st.session_state.capture_count = 0
-                st.session_state.person_name = person_name
-                st.rerun()
+            capture_method = st.radio(
+                "Select Method:",
+                ["🚀 Auto-Capture (Recommended)", "👆 Manual Capture"],
+                horizontal=True
+            )
             
-            if st.session_state.get('capture_mode', False):
-                capture_count = st.session_state.get('capture_count', 0)
-                person_name = st.session_state.get('person_name', '')
-                person_dir = os.path.join(dataset_path, person_name)
+            if capture_method == "🚀 Auto-Capture (Recommended)":
+                st.success("✨ Automatic capture - no clicking needed!")
+                st.write("**Instructions:**")
+                st.write("1. Click 'Start Auto-Capture' below")
+                st.write("2. Allow camera access")
+                st.write("3. Wait ~8 seconds for 50 photos")
+                st.write("4. Download the ZIP file")
+                st.write("5. Upload it back to process")
                 
-                st.progress(capture_count / 50, text=f"Progress: {capture_count}/50 photos")
-                
-                if capture_count < 50:
-                    # Auto-submit hack: use a unique key that changes each time
-                    img_file = st.camera_input(
-                        f"📸 Photo {capture_count + 1}/50 - Just keep clicking!", 
-                        key=f"cam_{capture_count}_{person_name}"
-                    )
+                if person_name:
+                    if st.button("📸 Start Auto-Capture", use_container_width=True, type="primary"):
+                        html_content = create_auto_capture_html(person_name, num_photos=50)
+                        components.html(html_content, height=700, scrolling=False)
                     
-                    if img_file is not None:
-                        # Save immediately
-                        image = Image.open(img_file)
-                        img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
-                        image.save(img_path, quality=85, optimize=True)
-                        
-                        # Update counter and rerun immediately
-                        st.session_state.capture_count += 1
-                        
-                        # Show success briefly
-                        if capture_count % 10 == 0:
-                            st.success(f"✅ {capture_count + 1} photos saved!")
-                        
-                        st.rerun()
+                    st.divider()
+                    st.write("**Step 2: Upload the ZIP file after download**")
+                    uploaded_zip = st.file_uploader("Upload the photos ZIP", type=['zip'])
+                    
+                    if uploaded_zip:
+                        with st.spinner("Processing photos..."):
+                            person_dir = os.path.join(dataset_path, person_name)
+                            os.makedirs(person_dir, exist_ok=True)
+                            
+                            try:
+                                with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
+                                    zip_ref.extractall(person_dir)
+                                
+                                # Count extracted files
+                                num_files = len([f for f in os.listdir(person_dir) if f.endswith('.jpg')])
+                                st.success(f"✅ Successfully added {num_files} photos for {person_name}!")
+                                st.balloons()
+                                st.session_state.embeddings = None  # Refresh encodings
+                                st.info("Face encodings will be refreshed. Go to 'Live Recognition' tab!")
+                            except Exception as e:
+                                st.error(f"Error extracting ZIP: {str(e)}")
                 else:
-                    st.success(f"🎉 All 50 photos captured for {person_name}!")
-                    st.balloons()
-                    
-                    # Reset and refresh
-                    st.session_state.embeddings = None
-                    st.session_state.capture_mode = False
+                    st.warning("Please enter a person name first")
+            
+            else:  # Manual Capture
+                st.info("Manual mode - 50 quick clicks!")
+                
+                # Simplified capture mode
+                if person_name and st.button("📸 Start Manual Capture (50 photos)", use_container_width=True, type="primary"):
+                    person_dir = os.path.join(dataset_path, person_name)
+                    os.makedirs(person_dir, exist_ok=True)
+                    st.session_state.capture_mode = True
                     st.session_state.capture_count = 0
+                    st.session_state.person_name = person_name
+                    st.rerun()
+                
+                if st.session_state.get('capture_mode', False):
+                    capture_count = st.session_state.get('capture_count', 0)
+                    person_name = st.session_state.get('person_name', '')
+                    person_dir = os.path.join(dataset_path, person_name)
                     
-                    st.info("✅ Face encodings will be refreshed. Go to 'Live Recognition' tab!")
+                    st.progress(capture_count / 50, text=f"Progress: {capture_count}/50 photos")
                     
-                    if st.button("🔄 Start Fresh Recognition", type="primary"):
-                        st.rerun()
+                    if capture_count < 50:
+                        # Auto-submit hack: use a unique key that changes each time
+                        img_file = st.camera_input(
+                            f"📸 Photo {capture_count + 1}/50 - Just keep clicking!", 
+                            key=f"cam_{capture_count}_{person_name}"
+                        )
+                        
+                        if img_file is not None:
+                            # Save immediately
+                            image = Image.open(img_file)
+                            img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
+                            image.save(img_path, quality=85, optimize=True)
+                            
+                            # Update counter and rerun immediately
+                            st.session_state.capture_count += 1
+                            
+                            # Show success briefly
+                            if capture_count % 10 == 0:
+                                st.success(f"✅ {capture_count + 1} photos saved!")
+                            
+                            st.rerun()
+                    else:
+                        st.success(f"🎉 All 50 photos captured for {person_name}!")
+                        st.balloons()
+                        
+                        # Reset and refresh
+                        st.session_state.embeddings = None
+                        st.session_state.capture_mode = False
+                        st.session_state.capture_count = 0
+                        
+                        st.info("✅ Face encodings will be refreshed. Go to 'Live Recognition' tab!")
+                        
+                        if st.button("🔄 Start Fresh Recognition", type="primary"):
+                            st.rerun()
     
     with col2:
         is_local = not os.path.exists('/mount/src')
