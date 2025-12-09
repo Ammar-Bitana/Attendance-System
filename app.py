@@ -73,14 +73,6 @@ def auto_camera_capture_component(num_photos=50):
             if (captureCount >= maxPhotos) {{
                 clearInterval(interval);
                 message.textContent = '🎉 Complete! Processing...';
-                setTimeout(() => {{
-                    window.parent.postMessage({{
-                        isStreamlitMessage: true,
-                        type: 'streamlit:setComponentValue',
-                        key: 'auto_camera',
-                        value: {{ images: capturedImages, completed: true }}
-                    }}, '*');
-                }}, 500);
                 return;
             }}
             
@@ -98,7 +90,7 @@ def auto_camera_capture_component(num_photos=50):
     </style>
     """
     
-    return components.html(html_code, height=650, key='auto_camera')
+    return components.html(html_code, height=650)
 
 # Constants
 dataset_path = 'dataset'
