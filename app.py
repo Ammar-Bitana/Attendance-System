@@ -289,7 +289,13 @@ tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Reco
 
 # Tab 1: Live Recognition
 with tab1:
-    st.subheader("📸 Face Recognition")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.subheader("📸 Face Recognition")
+    with col2:
+        if st.button("🔄 Refresh", use_container_width=True, help="Reload face encodings"):
+            st.session_state.embeddings = None
+            st.rerun()
     
     # Load models if not loaded
     if not st.session_state.models_loaded:
@@ -379,7 +385,7 @@ with tab1:
                             st.error(f"⚠️ Error processing face: {e}")
                     
                     # Display image with detection box
-                    st.image(img_array, caption="Recognition Result", use_column_width=True)
+                    st.image(img_array, caption="Recognition Result", use_container_width=True)
                     
                     if not recognized:
                         st.warning("⚠️ No recognized face found. Please ensure you are registered in the system.")
@@ -392,7 +398,7 @@ with tab1:
         if os.path.exists(attendance_file):
             df = pd.read_csv(attendance_file)
             if not df.empty:
-                st.dataframe(df, use_column_width=True)
+                st.dataframe(df, use_container_width=True)
             else:
                 st.info("No attendance marked yet today")
         else:
