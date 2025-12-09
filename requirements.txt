@@ -6,3 +6,4 @@ facenet-pytorch
 scikit-learn
 pandas
 Pillow
+pytz

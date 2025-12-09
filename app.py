@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 from datetime import datetime
+import pytz
 from facenet_pytorch import InceptionResnetV1, MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
 import csv
@@ -236,7 +237,9 @@ def save_attendance_to_csv(attendance_file, attendance_records):
 
 def mark_attendance(name, attendance_file, attendance_records):
     """Mark attendance for a person"""
-    current_time = datetime.now()
+    # Use Indian timezone (IST - UTC+5:30)
+    ist = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(ist)
     time_now = current_time.strftime("%H:%M:%S")
     hour = current_time.hour
     
@@ -277,7 +280,9 @@ with st.sidebar:
         total_people = len([d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))])
         st.metric("Total People", total_people)
     
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Use IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    today = datetime.now(ist).strftime("%Y-%m-%d")
     attendance_file = f"attendance_{today}.csv"
     
     if os.path.exists(attendance_file):
@@ -412,7 +417,7 @@ with tab2:
     
     col1, col2 = st.columns([1, 1])
     with col1:
-        date_filter = st.date_input("Select Date", datetime.now())
+        date_filter = st.date_input("Select Date", datetime.now(pytz.timezone('Asia/Kolkata')))
     
     selected_file = f"attendance_{date_filter.strftime('%Y-%m-%d')}.csv"
     
