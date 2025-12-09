@@ -205,79 +205,50 @@ tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Reco
 
 # Tab 1: Live Recognition
 with tab1:
-    col1, col2 = st.columns([2, 1])
+    st.subheader("📸 Face Recognition")
     
-    with col1:
-        st.subheader("Live Camera Feed")
-        
-        # Load models if not loaded
-        if not st.session_state.models_loaded:
-            with st.spinner("Loading models..."):
-                mtcnn, resnet = load_models()
-                st.session_state.mtcnn = mtcnn
-                st.session_state.resnet = resnet
-                st.session_state.models_loaded = True
-        
-        # Load encodings if not loaded
-        if st.session_state.embeddings is None:
-            with st.spinner("Loading face encodings..."):
-                embeddings, names = load_face_encodings(st.session_state.mtcnn, st.session_state.resnet)
-                if embeddings is not None:
-                    st.session_state.embeddings = embeddings
-                    st.session_state.names = names
-                    st.success(f"✅ Loaded {len(names)} faces from {len(set(names))} people")
-                else:
-                    st.warning("⚠️ No faces found in dataset. Please add people using the 'Add New Person' tab first.")
-                    st.session_state.embeddings = []
-                    st.session_state.names = []
-        
-        # Camera feed placeholder
-        camera_placeholder = st.empty()
-        
-        # Start/Stop buttons
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-        with col_btn1:
-            start_btn = st.button("▶️ Start Recognition", use_container_width=True)
-        with col_btn2:
-            stop_btn = st.button("⏹️ Stop", use_container_width=True)
-        with col_btn3:
-            refresh_btn = st.button("🔄 Refresh Encodings", use_container_width=True)
-        
-        if refresh_btn:
-            st.session_state.embeddings = None
-            st.rerun()
-        
-        if start_btn and st.session_state.embeddings is not None:
-            if len(st.session_state.embeddings) == 0:
-                st.error("❌ No people in dataset! Please add people first in the 'Add New Person' tab.")
+    # Load models if not loaded
+    if not st.session_state.models_loaded:
+        with st.spinner("Loading models..."):
+            mtcnn, resnet = load_models()
+            st.session_state.mtcnn = mtcnn
+            st.session_state.resnet = resnet
+            st.session_state.models_loaded = True
+    
+    # Load encodings if not loaded
+    if st.session_state.embeddings is None:
+        with st.spinner("Loading face encodings..."):
+            embeddings, names = load_face_encodings(st.session_state.mtcnn, st.session_state.resnet)
+            if embeddings is not None:
+                st.session_state.embeddings = embeddings
+                st.session_state.names = names
+                st.success(f"✅ Loaded {len(names)} faces from {len(set(names))} people")
             else:
-                st.session_state.recognition_active = True
+                st.warning("⚠️ No faces found in dataset. Please add people using the 'Add New Person' tab first.")
+                st.session_state.embeddings = []
+                st.session_state.names = []
+    
+    if st.session_state.embeddings is not None and len(st.session_state.embeddings) > 0:
+        st.info("📱 **Mobile Instructions:** Tap 'Take Photo' below, allow camera access, capture your face, then tap 'Use Photo'")
         
-        if stop_btn:
-            st.session_state.recognition_active = False
+        # Use Streamlit's camera_input for mobile compatibility
+        img_file = st.camera_input("Take a photo for attendance")
         
-        # Recognition loop
-        if st.session_state.recognition_active and st.session_state.embeddings is not None and len(st.session_state.embeddings) > 0:
-            cap = cv2.VideoCapture(0)
+        if img_file is not None:
+            # Read the image
+            image = Image.open(img_file)
+            img_array = np.array(image)
             
-            # Initialize attendance file
-            if not os.path.exists(attendance_file):
-                with open(attendance_file, "w", newline="") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["Name", "Morning", "Evening"])
+            # Convert RGB to BGR for OpenCV
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             
-            attendance_records = get_attendance_records(attendance_file)
-            
-            while st.session_state.recognition_active:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Failed to access camera")
-                    break
-                
-                img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Detect and recognize face
+            with st.spinner("Recognizing face..."):
                 boxes, probs = st.session_state.mtcnn.detect(img_rgb)
                 
-                if boxes is not None:
+                if boxes is not None and len(boxes) > 0:
+                    recognized = False
                     for box in boxes:
                         x1, y1, x2, y2 = [int(b) for b in box]
                         face_img = img_rgb[y1:y2, x1:x2]
@@ -291,39 +262,59 @@ with tab1:
                                 idx = np.argmax(sims)
                                 sim_score = sims[0][idx]
                                 
+                                recognition_threshold = 0.6
+                                
                                 if sim_score > recognition_threshold:
                                     name = st.session_state.names[idx]
-                                    color = (0, 255, 0)
+                                    
+                                    # Draw rectangle on image
+                                    cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                    cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
+                                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                                    
+                                    # Initialize attendance file
+                                    if not os.path.exists(attendance_file):
+                                        with open(attendance_file, "w", newline="") as f:
+                                            writer = csv.writer(f)
+                                            writer.writerow(["Name", "Morning", "Evening"])
+                                    
+                                    attendance_records = get_attendance_records(attendance_file)
                                     
                                     # Try to mark attendance
                                     marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
+                                    
                                     if marked:
-                                        with col2:
-                                            st.success(f"✅ {name} - {session} marked at {time_mark}")
+                                        st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
+                                        recognized = True
+                                    else:
+                                        st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
+                                        recognized = True
                                 else:
-                                    name = "Unknown"
-                                    color = (255, 0, 0)
-                                
-                                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                                cv2.putText(frame, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
-                                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-                        except:
-                            pass
-                
-                # Display frame
-                camera_placeholder.image(frame, channels="BGR", use_container_width=True)
-                time.sleep(0.03)
-            
-            cap.release()
-    
-    with col2:
-        st.subheader("Recent Activity")
+                                    st.error("❌ Face not recognized. Please try again or contact admin.")
+                        except Exception as e:
+                            st.error(f"⚠️ Error processing face: {e}")
+                    
+                    # Display image with detection box
+                    st.image(img_array, caption="Recognition Result", use_column_width=True)
+                    
+                    if not recognized:
+                        st.warning("⚠️ No recognized face found. Please ensure you are registered in the system.")
+                else:
+                    st.error("❌ No face detected in the image. Please retake with your face clearly visible.")
+        
+        # Show recent attendance
+        st.markdown("---")
+        st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
             df = pd.read_csv(attendance_file)
             if not df.empty:
-                st.dataframe(df.tail(10), use_container_width=True)
+                st.dataframe(df, use_column_width=True)
+            else:
+                st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")
+    else:
+        st.warning("⚠️ No people registered in the system. Please add people first in the 'Add New Person' tab.")
 
 # Tab 2: Attendance Records
 with tab2:
@@ -370,48 +361,73 @@ with tab3:
     with col1:
         person_name = st.text_input("Person Name")
         
-        if st.button("📸 Capture Photos", use_container_width=True):
-            if person_name:
-                person_dir = os.path.join(dataset_path, person_name)
-                os.makedirs(person_dir, exist_ok=True)
+        st.info("📱 **Mobile Mode:** Take 10 photos from different angles")
+        
+        if person_name and st.button("📸 Start Photo Capture", use_container_width=True):
+            person_dir = os.path.join(dataset_path, person_name)
+            os.makedirs(person_dir, exist_ok=True)
+            st.session_state.capture_mode = True
+            st.session_state.capture_count = 0
+            st.session_state.person_name = person_name
+            st.rerun()
+        
+        if st.session_state.get('capture_mode', False):
+            capture_count = st.session_state.get('capture_count', 0)
+            person_name = st.session_state.get('person_name', '')
+            person_dir = os.path.join(dataset_path, person_name)
+            
+            st.progress(capture_count / 10)
+            st.write(f"Photo {capture_count}/10 captured")
+            
+            if capture_count < 10:
+                img_file = st.camera_input(f"Take photo #{capture_count + 1}")
                 
-                cap = cv2.VideoCapture(0)
-                st.info("Capturing 50 photos... Please look at the camera!")
-                
-                progress_bar = st.progress(0)
-                img_placeholder = st.empty()
-                
-                for i in range(50):
-                    ret, frame = cap.read()
-                    if ret:
-                        img_path = os.path.join(person_dir, f"{person_name}_{i+1}.jpg")
-                        cv2.imwrite(img_path, frame)
-                        img_placeholder.image(frame, channels="BGR", width=400)
-                        progress_bar.progress((i + 1) / 50)
-                        time.sleep(0.1)
-                
-                cap.release()
-                progress_bar.empty()
-                img_placeholder.empty()
-                
-                st.success(f"✅ Successfully captured 50 photos for {person_name}!")
-                st.info("Click 'Refresh Encodings' in the Live Recognition tab to load the new person.")
+                if img_file is not None:
+                    image = Image.open(img_file)
+                    img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
+                    image.save(img_path)
+                    st.session_state.capture_count += 1
+                    time.sleep(0.5)
+                    st.rerun()
             else:
-                st.error("Please enter a person name")
+                st.success(f"✅ Successfully captured 10 photos for {person_name}!")
+                st.balloons()
+                if st.button("🔄 Refresh Encodings Now"):
+                    st.session_state.embeddings = None
+                    st.session_state.capture_mode = False
+                    st.session_state.capture_count = 0
+                    st.rerun()
     
     with col2:
         st.info("""
         **Instructions:**
         1. Enter the person's name
-        2. Click 'Capture Photos'
-        3. Look at the camera while 50 photos are captured
-        4. Go to 'Live Recognition' tab and click 'Refresh Encodings'
+        2. Click 'Start Photo Capture'
+        3. Take 10 photos from different angles:
+           - Front face
+           - Slight left turn
+           - Slight right turn
+           - Different expressions
+           - With/without glasses (if applicable)
+        4. Click 'Refresh Encodings' when done
         
         **Tips:**
         - Ensure good lighting
-        - Face the camera directly
-        - Vary your expressions slightly
+        - Keep face clearly visible
+        - Avoid shadows on face
+        - Stand at arm's length from camera
         """)
+        
+        if not st.session_state.get('capture_mode', False):
+            # Show current people
+            if os.path.exists(dataset_path):
+                people_list = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
+                if people_list:
+                    st.markdown("### Registered People")
+                    for person in sorted(people_list):
+                        person_dir = os.path.join(dataset_path, person)
+                        num_images = len([f for f in os.listdir(person_dir) if os.path.isfile(os.path.join(person_dir, f))])
+                        st.text(f"• {person} ({num_images} photos)")
 
 # Tab 4: Remove Person
 with tab4:
