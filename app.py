@@ -65,6 +65,11 @@ def save_cache(cache_data):
 
 def load_face_encodings(mtcnn, resnet):
     """Load or create face encodings"""
+    # Create dataset directory if it doesn't exist
+    if not os.path.exists(dataset_path):
+        os.makedirs(dataset_path)
+        return None, None
+    
     cache = load_cache()
     embeddings = []
     names = []
@@ -164,6 +169,12 @@ def mark_attendance(name, attendance_file, attendance_records):
 
 # UI
 st.title("📸 Face Recognition Attendance System")
+
+# Check if running on Streamlit Cloud
+if not os.path.exists('/mount/src'):
+    st.markdown("---")
+else:
+    st.info("ℹ️ **Cloud Deployment Note:** Camera features are not available on Streamlit Cloud. Use the local version for face recognition. This cloud version is for viewing attendance records.")
 st.markdown("---")
 
 # Sidebar
@@ -216,7 +227,9 @@ with tab1:
                     st.session_state.names = names
                     st.success(f"✅ Loaded {len(names)} faces from {len(set(names))} people")
                 else:
-                    st.error("❌ No faces found in dataset! Please add people first.")
+                    st.warning("⚠️ No faces found in dataset. Please add people using the 'Add New Person' tab first.")
+                    st.session_state.embeddings = []
+                    st.session_state.names = []
         
         # Camera feed placeholder
         camera_placeholder = st.empty()
@@ -235,13 +248,16 @@ with tab1:
             st.rerun()
         
         if start_btn and st.session_state.embeddings is not None:
-            st.session_state.recognition_active = True
+            if len(st.session_state.embeddings) == 0:
+                st.error("❌ No people in dataset! Please add people first in the 'Add New Person' tab.")
+            else:
+                st.session_state.recognition_active = True
         
         if stop_btn:
             st.session_state.recognition_active = False
         
         # Recognition loop
-        if st.session_state.recognition_active and st.session_state.embeddings is not None:
+        if st.session_state.recognition_active and st.session_state.embeddings is not None and len(st.session_state.embeddings) > 0:
             cap = cv2.VideoCapture(0)
             
             # Initialize attendance file
