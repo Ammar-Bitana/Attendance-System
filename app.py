@@ -256,24 +256,10 @@ def mark_attendance(name, attendance_file, attendance_records):
 
 # UI
 st.title("📸 Face Recognition Attendance System")
-
-# Check if running on Streamlit Cloud
-if not os.path.exists('/mount/src'):
-    st.markdown("---")
-else:
-    st.info("ℹ️ **Cloud Deployment Note:** Camera features are not available on Streamlit Cloud. Use the local version for face recognition. This cloud version is for viewing attendance records.")
 st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    device_info = "🚀 GPU (CUDA)" if torch.cuda.is_available() else "💻 CPU"
-    st.info(f"**Device:** {device_info}")
-    
-    recognition_threshold = st.slider("Recognition Threshold", 0.0, 1.0, 0.6, 0.05)
-    
-    st.markdown("---")
     st.header("📊 Statistics")
     
     if os.path.exists(dataset_path):
@@ -327,8 +313,6 @@ with tab1:
         # Camera selection
         camera_option = st.radio("📷 Camera:", ["Front Camera (Selfie)", "Back Camera"], horizontal=True)
         camera_mode = "user" if "Front" in camera_option else "environment"
-        
-        st.info("📱 **Mobile Instructions:** Tap 'Take Photo' below, allow camera access, capture your face, then tap 'Use Photo'")
         
         # Use Streamlit's camera_input for mobile compatibility
         html_code = f"""
@@ -509,8 +493,6 @@ with tab3:
                 else:
                     st.error("Please enter a person name")
         else:
-            st.info("📱 **Mobile/Cloud Mode:** Choose your capture method")
-            
             capture_method = st.radio(
                 "Select Method:",
                 ["🚀 Auto-Capture (Recommended)", "👆 Manual Capture"],
@@ -663,22 +645,18 @@ with tab3:
 with tab4:
     st.subheader("🗑️ Remove Person from Dataset")
     
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        # Get list of people in dataset
-        people_list = []
-        if os.path.exists(dataset_path):
-            people_list = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
+    # Get list of people in dataset
+    people_list = []
+    if os.path.exists(dataset_path):
+        people_list = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
         
         if people_list:
             person_to_remove = st.selectbox("Select person to remove", sorted(people_list))
             
             if person_to_remove:
                 person_dir = os.path.join(dataset_path, person_to_remove)
-                num_images = len([f for f in os.listdir(person_dir) if os.path.isfile(os.path.join(person_dir, f))])
                 
-                st.warning(f"⚠️ This will permanently delete **{person_to_remove}**, all {num_images} images, and all attendance records.")
+                st.warning(f"⚠️ This will permanently delete **{person_to_remove}** and all attendance records.")
                 
                 col_btn1, col_btn2 = st.columns(2)
                 
@@ -725,27 +703,10 @@ with tab4:
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error removing person: {e}")
-        else:
-            st.info("No people found in the dataset.")
+    else:
+        st.info("No people found in the dataset.")
     
-    with col2:
-        st.info("""
-        **Warning:**
-        - This action is **permanent** and cannot be undone
-        - All photos of the selected person will be deleted
-        - All attendance records will be removed from CSV files
-        - Their face encodings will be removed from the cache
-        - They will no longer be recognized by the system
-        
-        **Note:**
-        - This does NOT delete their attendance history
-        - Past attendance records remain intact
-        - Only the recognition data is removed
-        """)
-        
-        if people_list:
-            st.markdown("### Current People in Dataset")
-            for person in sorted(people_list):
-                person_dir = os.path.join(dataset_path, person)
-                num_images = len([f for f in os.listdir(person_dir) if os.path.isfile(os.path.join(person_dir, f))])
-                st.text(f"• {person} ({num_images} images)")
+    if people_list:
+        st.markdown("### Current People in Dataset")
+        for person in sorted(people_list):
+            st.text(f"• {person}")
