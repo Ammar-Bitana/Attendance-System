@@ -324,10 +324,27 @@ with tab1:
                 st.session_state.names = []
     
     if st.session_state.embeddings is not None and len(st.session_state.embeddings) > 0:
+        # Camera selection
+        camera_option = st.radio("📷 Camera:", ["Front Camera (Selfie)", "Back Camera"], horizontal=True)
+        camera_mode = "user" if "Front" in camera_option else "environment"
+        
         st.info("📱 **Mobile Instructions:** Tap 'Take Photo' below, allow camera access, capture your face, then tap 'Use Photo'")
         
         # Use Streamlit's camera_input for mobile compatibility
-        img_file = st.camera_input("Take a photo for attendance")
+        html_code = f"""
+        <script>
+        const video = parent.document.querySelector('video');
+        if (video) {{
+            const constraints = {{ video: {{ facingMode: '{camera_mode}' }} }};
+            navigator.mediaDevices.getUserMedia(constraints).then(stream => {{
+                video.srcObject = stream;
+            }});
+        }}
+        </script>
+        """
+        components.html(html_code, height=0)
+        
+        img_file = st.camera_input("Take a photo for attendance", key=f"recognition_cam_{camera_mode}")
         
         if img_file is not None:
             # Read the image
@@ -555,13 +572,18 @@ with tab3:
                     person_name = st.session_state.get('person_name', '')
                     person_dir = os.path.join(dataset_path, person_name)
                     
+                    # Camera selection for manual capture
+                    if capture_count == 0:
+                        camera_choice = st.radio("📷 Select Camera:", ["Front (Selfie)", "Back"], horizontal=True, key="manual_cam_choice")
+                        st.session_state.camera_facing = "user" if "Front" in camera_choice else "environment"
+                    
                     st.progress(capture_count / 50, text=f"Progress: {capture_count}/50 photos")
                     
                     if capture_count < 50:
                         # Auto-submit hack: use a unique key that changes each time
                         img_file = st.camera_input(
                             f"📸 Photo {capture_count + 1}/50 - Just keep clicking!", 
-                            key=f"cam_{capture_count}_{person_name}"
+                            key=f"cam_{capture_count}_{person_name}_{st.session_state.get('camera_facing', 'user')}"
                         )
                         
                         if img_file is not None:
@@ -656,7 +678,7 @@ with tab4:
                 person_dir = os.path.join(dataset_path, person_to_remove)
                 num_images = len([f for f in os.listdir(person_dir) if os.path.isfile(os.path.join(person_dir, f))])
                 
-                st.warning(f"⚠️ This will permanently delete **{person_to_remove}** and all {num_images} associated images.")
+                st.warning(f"⚠️ This will permanently delete **{person_to_remove}**, all {num_images} images, and all attendance records.")
                 
                 col_btn1, col_btn2 = st.columns(2)
                 
@@ -667,6 +689,9 @@ with tab4:
                     if st.button("🗑️ Delete Person", type="primary", use_container_width=True, disabled=not confirm):
                         try:
                             import shutil
+                            import glob
+                            
+                            # Remove person directory
                             shutil.rmtree(person_dir)
                             
                             # Clear cache entries for this person
@@ -677,11 +702,24 @@ with tab4:
                                     del cache[key]
                                 save_cache(cache)
                             
+                            # Remove from all attendance CSV files
+                            attendance_files = glob.glob("attendance_*.csv")
+                            removed_count = 0
+                            for file in attendance_files:
+                                if os.path.exists(file):
+                                    df = pd.read_csv(file)
+                                    if person_to_remove in df['Name'].values:
+                                        df = df[df['Name'] != person_to_remove]
+                                        df.to_csv(file, index=False)
+                                        removed_count += 1
+                            
                             # Clear session state to force reload
                             st.session_state.embeddings = None
                             st.session_state.names = None
                             
                             st.success(f"✅ Successfully removed {person_to_remove} from the dataset!")
+                            if removed_count > 0:
+                                st.success(f"📋 Removed attendance records from {removed_count} file(s)")
                             st.info("The encodings will be refreshed automatically.")
                             time.sleep(2)
                             st.rerun()
@@ -695,6 +733,7 @@ with tab4:
         **Warning:**
         - This action is **permanent** and cannot be undone
         - All photos of the selected person will be deleted
+        - All attendance records will be removed from CSV files
         - Their face encodings will be removed from the cache
         - They will no longer be recognized by the system
         
