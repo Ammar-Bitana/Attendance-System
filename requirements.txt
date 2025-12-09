@@ -1,9 +1,8 @@
-streamlit>=1.28.0
-opencv-python-headless==4.8.1.78
-torch==2.0.1
-torchvision==0.15.2
-facenet-pytorch==2.5.3
-scikit-learn==1.3.2
-pandas==2.1.4
-numpy==1.24.3
-Pillow==10.1.0
+streamlit
+opencv-python-headless
+torch --index-url https://download.pytorch.org/whl/cpu
+torchvision --index-url https://download.pytorch.org/whl/cpu
+facenet-pytorch
+scikit-learn
+pandas
+Pillow
