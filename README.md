@@ -34,10 +34,24 @@ streamlit run app.py
 
 ## 📱 Usage
 
-1. **Add New Person**: Capture 50 photos of a person to register them
-2. **Live Recognition**: Start the camera to recognize and mark attendance
-3. **View Records**: Check attendance history and download reports
-4. **Remove Person**: Delete a person from the system if needed
+### Desktop Mode
+- **Add New Person**: Click "Capture Photos" - automatically takes 50 photos using webcam
+- **Live Recognition**: Uses local webcam for real-time recognition
+
+### Mobile/Cloud Mode (Recommended)
+- **Auto-Capture (New!)**: 
+  1. Enter person name
+  2. Click "Start Auto-Capture"
+  3. Allow camera access
+  4. Wait ~8 seconds (50 photos captured automatically!)
+  5. Download the ZIP file
+  6. Upload it back to complete registration
+- **Manual Capture**: Take 50 photos manually (legacy method)
+- **Live Recognition**: Use phone camera for attendance marking
+
+### General Features
+1. **View Records**: Check attendance history and download CSV reports
+2. **Remove Person**: Delete a person from the system if needed
 
 ## 🛠️ Technology Stack
 
