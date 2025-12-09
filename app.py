@@ -361,62 +361,115 @@ with tab3:
     with col1:
         person_name = st.text_input("Person Name")
         
-        st.info("📱 **Mobile Mode:** Take 10 photos from different angles")
+        # Check if running locally (has webcam access)
+        is_local = not os.path.exists('/mount/src')
         
-        if person_name and st.button("📸 Start Photo Capture", use_container_width=True):
-            person_dir = os.path.join(dataset_path, person_name)
-            os.makedirs(person_dir, exist_ok=True)
-            st.session_state.capture_mode = True
-            st.session_state.capture_count = 0
-            st.session_state.person_name = person_name
-            st.rerun()
-        
-        if st.session_state.get('capture_mode', False):
-            capture_count = st.session_state.get('capture_count', 0)
-            person_name = st.session_state.get('person_name', '')
-            person_dir = os.path.join(dataset_path, person_name)
+        if is_local:
+            st.info("🖥️ **Desktop Mode:** Will automatically capture 50 photos")
             
-            st.progress(capture_count / 10)
-            st.write(f"Photo {capture_count}/10 captured")
-            
-            if capture_count < 10:
-                img_file = st.camera_input(f"Take photo #{capture_count + 1}")
-                
-                if img_file is not None:
-                    image = Image.open(img_file)
-                    img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
-                    image.save(img_path)
-                    st.session_state.capture_count += 1
-                    time.sleep(0.5)
-                    st.rerun()
-            else:
-                st.success(f"✅ Successfully captured 10 photos for {person_name}!")
-                st.balloons()
-                if st.button("🔄 Refresh Encodings Now"):
+            if st.button("📸 Capture Photos", use_container_width=True):
+                if person_name:
+                    person_dir = os.path.join(dataset_path, person_name)
+                    os.makedirs(person_dir, exist_ok=True)
+                    
+                    cap = cv2.VideoCapture(0)
+                    st.info("Capturing 50 photos... Please look at the camera!")
+                    
+                    progress_bar = st.progress(0)
+                    img_placeholder = st.empty()
+                    
+                    for i in range(50):
+                        ret, frame = cap.read()
+                        if ret:
+                            img_path = os.path.join(person_dir, f"{person_name}_{i+1}.jpg")
+                            cv2.imwrite(img_path, frame)
+                            img_placeholder.image(frame, channels="BGR", width=400)
+                            progress_bar.progress((i + 1) / 50)
+                            time.sleep(0.1)
+                    
+                    cap.release()
+                    progress_bar.empty()
+                    img_placeholder.empty()
+                    
+                    st.success(f"✅ Successfully captured 50 photos for {person_name}!")
+                    st.info("The system will automatically refresh encodings.")
                     st.session_state.embeddings = None
-                    st.session_state.capture_mode = False
-                    st.session_state.capture_count = 0
-                    st.rerun()
+                else:
+                    st.error("Please enter a person name")
+        else:
+            st.info("📱 **Mobile Mode:** Take 10 photos from different angles")
+            
+            if person_name and st.button("📸 Start Photo Capture", use_container_width=True):
+                person_dir = os.path.join(dataset_path, person_name)
+                os.makedirs(person_dir, exist_ok=True)
+                st.session_state.capture_mode = True
+                st.session_state.capture_count = 0
+                st.session_state.person_name = person_name
+                st.rerun()
+            
+            if st.session_state.get('capture_mode', False):
+                capture_count = st.session_state.get('capture_count', 0)
+                person_name = st.session_state.get('person_name', '')
+                person_dir = os.path.join(dataset_path, person_name)
+                
+                st.progress(capture_count / 10)
+                st.write(f"Photo {capture_count}/10 captured")
+                
+                if capture_count < 10:
+                    img_file = st.camera_input(f"Take photo #{capture_count + 1}")
+                    
+                    if img_file is not None:
+                        image = Image.open(img_file)
+                        img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
+                        image.save(img_path)
+                        st.session_state.capture_count += 1
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.success(f"✅ Successfully captured 10 photos for {person_name}!")
+                    st.balloons()
+                    if st.button("🔄 Refresh Encodings Now"):
+                        st.session_state.embeddings = None
+                        st.session_state.capture_mode = False
+                        st.session_state.capture_count = 0
+                        st.rerun()
     
     with col2:
-        st.info("""
-        **Instructions:**
-        1. Enter the person's name
-        2. Click 'Start Photo Capture'
-        3. Take 10 photos from different angles:
-           - Front face
-           - Slight left turn
-           - Slight right turn
-           - Different expressions
-           - With/without glasses (if applicable)
-        4. Click 'Refresh Encodings' when done
+        is_local = not os.path.exists('/mount/src')
         
-        **Tips:**
-        - Ensure good lighting
-        - Keep face clearly visible
-        - Avoid shadows on face
-        - Stand at arm's length from camera
-        """)
+        if is_local:
+            st.info("""
+            **Desktop Instructions:**
+            1. Enter the person's name
+            2. Click 'Capture Photos'
+            3. Look at the camera while 50 photos are automatically captured
+            4. System will refresh encodings automatically
+            
+            **Tips:**
+            - Ensure good lighting
+            - Face the camera directly
+            - Vary your expressions slightly during capture
+            - Stay in frame for all 50 photos
+            """)
+        else:
+            st.info("""
+            **Mobile Instructions:**
+            1. Enter the person's name
+            2. Click 'Start Photo Capture'
+            3. Take 10 photos from different angles:
+               - Front face
+               - Slight left turn
+               - Slight right turn
+               - Different expressions
+               - With/without glasses (if applicable)
+            4. Click 'Refresh Encodings' when done
+            
+            **Tips:**
+            - Ensure good lighting
+            - Keep face clearly visible
+            - Avoid shadows on face
+            - Stand at arm's length from camera
+            """)
         
         if not st.session_state.get('capture_mode', False):
             # Show current people
