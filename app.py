@@ -20,8 +20,7 @@ import io
 
 # Page config
 st.set_page_config(
-    page_title="Face Recognition Attendance System",
-    page_icon="📸",
+    page_title="Attendance System",
     layout="wide"
 )
 
@@ -500,21 +499,13 @@ with tab3:
             )
             
             if capture_method == "🚀 Auto-Capture (Recommended)":
-                st.success("✨ Automatic capture - no clicking needed!")
-                st.write("**Instructions:**")
-                st.write("1. Click 'Start Auto-Capture' below")
-                st.write("2. Allow camera access")
-                st.write("3. Wait ~8 seconds for 50 photos")
-                st.write("4. Download the ZIP file")
-                st.write("5. Upload it back to process")
-                
                 if person_name:
                     if st.button("📸 Start Auto-Capture", use_container_width=True, type="primary"):
                         html_content = create_auto_capture_html(person_name, num_photos=50)
                         components.html(html_content, height=700, scrolling=False)
                     
                     st.divider()
-                    st.write("**Step 2: Upload the ZIP file after download**")
+                    st.write("**Upload the ZIP file after download**")
                     uploaded_zip = st.file_uploader("Upload the photos ZIP", type=['zip'])
                     
                     if uploaded_zip:
@@ -526,20 +517,15 @@ with tab3:
                                 with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
                                     zip_ref.extractall(person_dir)
                                 
-                                # Count extracted files
-                                num_files = len([f for f in os.listdir(person_dir) if f.endswith('.jpg')])
-                                st.success(f"✅ Successfully added {num_files} photos for {person_name}!")
+                                st.success(f"✅ Successfully added {person_name}!")
                                 st.balloons()
                                 st.session_state.embeddings = None  # Refresh encodings
-                                st.info("Face encodings will be refreshed. Go to 'Live Recognition' tab!")
                             except Exception as e:
                                 st.error(f"Error extracting ZIP: {str(e)}")
                 else:
                     st.warning("Please enter a person name first")
             
             else:  # Manual Capture
-                st.info("Manual mode - 50 quick clicks!")
-                
                 # Simplified capture mode
                 if person_name and st.button("📸 Start Manual Capture (50 photos)", use_container_width=True, type="primary"):
                     person_dir = os.path.join(dataset_path, person_name)
@@ -597,39 +583,6 @@ with tab3:
                             st.rerun()
     
     with col2:
-        is_local = not os.path.exists('/mount/src')
-        
-        if is_local:
-            st.info("""
-            **Desktop Instructions:**
-            1. Enter the person's name
-            2. Click 'Capture Photos'
-            3. Look at the camera while 50 photos are automatically captured
-            4. System will refresh encodings automatically
-            
-            **Tips:**
-            - Ensure good lighting
-            - Face the camera directly
-            - Vary your expressions slightly during capture
-            - Stay in frame for all 50 photos
-            """)
-        else:
-            st.info("""
-            **Mobile Quick Capture:**
-            1. Enter the person's name
-            2. Click 'Start Quick Capture'
-            3. Take photo → Click "Use Photo" → Repeat
-            4. Photos save instantly (no processing delay)
-            5. Progress bar shows your count
-            6. After 50 photos, system auto-refreshes!
-            
-            **Speed Tips:**
-            - Photos save immediately, no waiting
-            - Vary your pose slightly between shots
-            - Keep clicking through quickly
-            - Should take ~2-3 minutes for all 50
-            """)
-        
         if not st.session_state.get('capture_mode', False):
             # Show current people
             if os.path.exists(dataset_path):
@@ -637,9 +590,7 @@ with tab3:
                 if people_list:
                     st.markdown("### Registered People")
                     for person in sorted(people_list):
-                        person_dir = os.path.join(dataset_path, person)
-                        num_images = len([f for f in os.listdir(person_dir) if os.path.isfile(os.path.join(person_dir, f))])
-                        st.text(f"• {person} ({num_images} photos)")
+                        st.text(f"• {person}")
 
 # Tab 4: Remove Person
 with tab4:
