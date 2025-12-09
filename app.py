@@ -109,7 +109,7 @@ if 'names' not in st.session_state:
 
 # Page config
 st.set_page_config(
-    page_title="Face Recognition Attendance System",
+    page_title="Attendance System",
     page_icon="📸",
     layout="wide"
 )
@@ -254,7 +254,7 @@ def mark_attendance(name, attendance_file, attendance_records):
     return False, session, time_now
 
 # UI
-st.title("📸 Face Recognition Attendance System")
+st.title("📸 Attendance System")
 st.markdown("---")
 
 # Sidebar
