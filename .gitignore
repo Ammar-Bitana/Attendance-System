@@ -1,7 +1,0 @@
-packages-system.txt
-*.pkl
-face_encodings_cache.pkl
-test_import.py
-__pycache__/
-*.pyc
-.vscode/
