@@ -397,9 +397,9 @@ with tab3:
                 else:
                     st.error("Please enter a person name")
         else:
-            st.info("📱 **Mobile Mode:** Take 10 photos from different angles")
+            st.info("📱 **Mobile Mode:** Will automatically capture 50 photos - just keep your face in frame!")
             
-            if person_name and st.button("📸 Start Photo Capture", use_container_width=True):
+            if person_name and st.button("📸 Start Capturing 50 Photos", use_container_width=True):
                 person_dir = os.path.join(dataset_path, person_name)
                 os.makedirs(person_dir, exist_ok=True)
                 st.session_state.capture_mode = True
@@ -412,27 +412,29 @@ with tab3:
                 person_name = st.session_state.get('person_name', '')
                 person_dir = os.path.join(dataset_path, person_name)
                 
-                st.progress(capture_count / 10)
-                st.write(f"Photo {capture_count}/10 captured")
+                st.progress(capture_count / 50)
+                st.write(f"📸 Photos captured: {capture_count}/50")
                 
-                if capture_count < 10:
-                    img_file = st.camera_input(f"Take photo #{capture_count + 1}")
+                if capture_count < 50:
+                    st.info(f"Keep taking photos! Click 'Use Photo' for each one. {50 - capture_count} remaining.")
+                    img_file = st.camera_input(f"Photo #{capture_count + 1}", key=f"camera_{capture_count}")
                     
                     if img_file is not None:
                         image = Image.open(img_file)
                         img_path = os.path.join(person_dir, f"{person_name}_{capture_count + 1}.jpg")
                         image.save(img_path)
                         st.session_state.capture_count += 1
-                        time.sleep(0.5)
+                        time.sleep(0.3)
                         st.rerun()
                 else:
-                    st.success(f"✅ Successfully captured 10 photos for {person_name}!")
+                    st.success(f"✅ Successfully captured 50 photos for {person_name}!")
                     st.balloons()
-                    if st.button("🔄 Refresh Encodings Now"):
-                        st.session_state.embeddings = None
-                        st.session_state.capture_mode = False
-                        st.session_state.capture_count = 0
-                        st.rerun()
+                    st.info("Refreshing face encodings...")
+                    st.session_state.embeddings = None
+                    st.session_state.capture_mode = False
+                    st.session_state.capture_count = 0
+                    time.sleep(2)
+                    st.rerun()
     
     with col2:
         is_local = not os.path.exists('/mount/src')
@@ -455,20 +457,19 @@ with tab3:
             st.info("""
             **Mobile Instructions:**
             1. Enter the person's name
-            2. Click 'Start Photo Capture'
-            3. Take 10 photos from different angles:
-               - Front face
-               - Slight left turn
-               - Slight right turn
-               - Different expressions
-               - With/without glasses (if applicable)
-            4. Click 'Refresh Encodings' when done
+            2. Click 'Start Capturing 50 Photos'
+            3. The camera will open - keep your face in frame
+            4. After each photo, click 'Use Photo' button
+            5. Repeat 50 times (progress bar shows your progress)
+            6. Vary expressions and angles slightly between photos
+            7. System will auto-refresh when complete!
             
             **Tips:**
-            - Ensure good lighting
-            - Keep face clearly visible
-            - Avoid shadows on face
-            - Stand at arm's length from camera
+            - Keep your face centered and well-lit
+            - Slightly move/turn your head between photos
+            - Try different expressions (smile, neutral, etc.)
+            - If wearing glasses, tilt head slightly
+            - Be patient - 50 photos = better recognition!
             """)
         
         if not st.session_state.get('capture_mode', False):
