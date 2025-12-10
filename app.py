@@ -32,19 +32,70 @@ def create_auto_capture_html(person_name, num_photos=50):
     <!DOCTYPE html>
     <html>
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body {{ font-family: Arial; text-align: center; padding: 20px; background: #f5f5f5; }}
-            #video {{ border: 3px solid #4CAF50; border-radius: 10px; }}
-            .status {{ font-size: 24px; margin: 20px; font-weight: bold; }}
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding: 10px; 
+                background: #f5f5f5;
+                overflow-x: hidden;
+            }}
+            h2 {{ 
+                font-size: 20px; 
+                margin-bottom: 15px; 
+                color: #333;
+            }}
+            #video {{ 
+                max-width: 100%; 
+                width: 100%;
+                height: auto;
+                border: 3px solid #4CAF50; 
+                border-radius: 10px;
+                display: block;
+                margin: 0 auto;
+            }}
+            .status {{ 
+                font-size: 22px; 
+                margin: 15px 0; 
+                font-weight: bold; 
+                color: #333;
+            }}
+            #message {{ 
+                font-size: 16px; 
+                color: #2196F3; 
+                margin: 10px 0;
+                min-height: 25px;
+            }}
+            #download {{ 
+                margin-top: 15px;
+                margin-bottom: 20px;
+            }}
+            #download a {{ 
+                background: #4CAF50;
+                color: white;
+                padding: 12px 25px;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 16px;
+                display: inline-block;
+            }}
             canvas {{ display: none; }}
+            @media (max-width: 600px) {{
+                h2 {{ font-size: 18px; }}
+                .status {{ font-size: 20px; }}
+                #message {{ font-size: 14px; }}
+                #download a {{ padding: 10px 20px; font-size: 14px; }}
+            }}
         </style>
     </head>
     <body>
         <h2>📸 Auto-Capturing for {person_name}</h2>
-        <video id="video" width="640" height="480" autoplay></video>
-        <canvas id="canvas" width="640" height="480"></canvas>
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
         <div class="status">Photos: <span id="count">0</span>/{num_photos}</div>
-        <div id="message" style="font-size: 18px; color: #2196F3;">Starting...</div>
+        <div id="message">Starting...</div>
         <div id="download"></div>
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -56,12 +107,27 @@ def create_auto_capture_html(person_name, num_photos=50):
             const maxPhotos = {num_photos};
             const photos = [];
             
-            navigator.mediaDevices.getUserMedia({{ video: {{ facingMode: 'user' }} }})
-                .then(stream => {{
-                    video.srcObject = stream;
-                    document.getElementById('message').textContent = 'Starting in 2 seconds...';
-                    setTimeout(startCapture, 2000);
-                }});
+            // Set canvas size based on video
+            video.addEventListener('loadedmetadata', () => {{
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }});
+            
+            navigator.mediaDevices.getUserMedia({{ 
+                video: {{ 
+                    facingMode: 'user',
+                    width: {{ ideal: 640 }},
+                    height: {{ ideal: 480 }}
+                }} 
+            }})
+            .then(stream => {{
+                video.srcObject = stream;
+                document.getElementById('message').textContent = 'Starting in 2 seconds...';
+                setTimeout(startCapture, 2000);
+            }})
+            .catch(err => {{
+                document.getElementById('message').textContent = 'Error: ' + err.message;
+            }});
             
             function startCapture() {{
                 document.getElementById('message').textContent = 'Capturing...';
@@ -71,7 +137,7 @@ def create_auto_capture_html(person_name, num_photos=50):
                         finish();
                         return;
                     }}
-                    ctx.drawImage(video, 0, 0, 640, 480);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     canvas.toBlob(blob => photos.push(blob), 'image/jpeg', 0.85);
                     count++;
                     document.getElementById('count').textContent = count;
@@ -91,8 +157,9 @@ def create_auto_capture_html(person_name, num_photos=50):
                 const url = URL.createObjectURL(zipBlob);
                 
                 document.getElementById('download').innerHTML = 
-                    '<a href="' + url + '" download="{person_name}_photos.zip" style="background:#4CAF50;color:white;padding:15px 30px;text-decoration:none;border-radius:5px;font-size:18px;">📥 Download ZIP</a>';
+                    '<a href="' + url + '" download="{person_name}_photos.zip">📥 Download ZIP</a>';
                 document.getElementById('message').textContent = '✅ Ready! Click to download';
+                document.getElementById('message').style.color = '#4CAF50';
             }}
         </script>
     </body>
@@ -562,7 +629,7 @@ with tab3:
                 if person_name:
                     if st.button("📸 Start Auto-Capture", use_container_width=True, type="primary"):
                         html_content = create_auto_capture_html(person_name, num_photos=50)
-                        components.html(html_content, height=700, scrolling=False)
+                        components.html(html_content, height=800, scrolling=True)
                     
                     st.divider()
                     st.write("**Upload the ZIP file after download**")
