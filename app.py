@@ -693,21 +693,26 @@ with tab1:
                                             writer = csv.writer(f)
                                             writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
-                                    attendance_records = get_attendance_records(attendance_file)
-                                    
-                                    # Try to mark attendance
-                                    marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
-                                    
-                                    if marked:
-                                        st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
-                                        recognized = True
-                                    else:
-                                        st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
+                                    try:
+                                        attendance_records = get_attendance_records(attendance_file)
+                                        
+                                        # Try to mark attendance
+                                        marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
+                                        
+                                        if marked:
+                                            st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
+                                            recognized = True
+                                        else:
+                                            st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
+                                            recognized = True
+                                    except Exception as csv_error:
+                                        st.warning(f"✅ **{name}** recognized but couldn't record attendance. Please try again.")
                                         recognized = True
                                 else:
                                     st.error("❌ Face not recognized. Please try again or contact admin.")
                         except Exception as e:
-                            st.error(f"⚠️ Error processing face: {e}")
+                            # Silently skip faces that can't be processed
+                            pass
                     
                     # Display image with detection box
                     st.image(img_array, caption="Recognition Result", use_container_width=True)
@@ -721,10 +726,13 @@ with tab1:
         st.markdown("---")
         st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file)
-            if not df.empty:
-                st.dataframe(df, use_container_width=True)
-            else:
+            try:
+                df = pd.read_csv(attendance_file)
+                if not df.empty:
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("No attendance marked yet today")
+            except (pd.errors.EmptyDataError, KeyError):
                 st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")
