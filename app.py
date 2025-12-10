@@ -269,21 +269,18 @@ def get_monthly_attendance_summary(year, month):
         attendance_file = f"attendance_{date_str}.csv"
         
         if os.path.exists(attendance_file):
-            try:
-                df = pd.read_csv(attendance_file, skiprows=2)
-                for _, row in df.iterrows():
-                    name = row['Name']
-                    all_people.add(name)
-                    if name not in monthly_data:
-                        monthly_data[name] = {
-                            'Days Present': 0,
-                            'Present Dates': [],
-                            'Absent Dates': []
-                        }
-                    monthly_data[name]['Days Present'] += 1
-                    monthly_data[name]['Present Dates'].append(date_str)
-            except pd.errors.EmptyDataError:
-                pass  # Skip empty files
+            df = pd.read_csv(attendance_file)
+            for _, row in df.iterrows():
+                name = row['Name']
+                all_people.add(name)
+                if name not in monthly_data:
+                    monthly_data[name] = {
+                        'Days Present': 0,
+                        'Present Dates': [],
+                        'Absent Dates': []
+                    }
+                monthly_data[name]['Days Present'] += 1
+                monthly_data[name]['Present Dates'].append(date_str)
     
     # Second pass: identify absent dates for each person
     for day in range(1, num_days + 1):
@@ -417,11 +414,7 @@ def send_daily_email_auto():
             return  # Email not configured
         
         # Read and send today's attendance
-        try:
-            df = pd.read_csv(attendance_file, skiprows=2)
-        except pd.errors.EmptyDataError:
-            return  # No data in file
-        
+        df = pd.read_csv(attendance_file)
         if df.empty:
             return
         
@@ -534,12 +527,15 @@ def get_attendance_records(attendance_file):
     """Load existing attendance records"""
     attendance_records = {}
     if os.path.exists(attendance_file):
-        df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
-        for _, row in df.iterrows():
-            name = row['Name']
-            intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
-            outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
-            attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
+        try:
+            df = pd.read_csv(attendance_file, skiprows=2)
+            for _, row in df.iterrows():
+                name = row['Name']
+                intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
+                outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
+                attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
+        except (pd.errors.EmptyDataError, KeyError):
+            pass  # Skip if file is empty or columns don't exist
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
@@ -599,11 +595,8 @@ with st.sidebar:
     attendance_file = f"attendance_{today}.csv"
     
     if os.path.exists(attendance_file):
-        try:
-            df = pd.read_csv(attendance_file, skiprows=2)
-            st.metric("Today's Attendance", len(df))
-        except pd.errors.EmptyDataError:
-            st.metric("Today's Attendance", 0)
+        df = pd.read_csv(attendance_file)
+        st.metric("Today's Attendance", len(df))
 
 # Main tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person"])
@@ -698,14 +691,14 @@ with tab1:
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Initialize attendance file with proper headers
+                                    # Initialize attendance file with date header
                                     if not os.path.exists(attendance_file):
                                         with open(attendance_file, "w", newline="") as f:
                                             writer = csv.writer(f)
                                             ist = pytz.timezone('Asia/Kolkata')
                                             today = datetime.now(ist).strftime("%Y-%m-%d")
                                             writer.writerow([f"Date: {today}"])
-                                            writer.writerow([])  # Empty row for spacing
+                                            writer.writerow([])  # Empty row
                                             writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
                                     attendance_records = get_attendance_records(attendance_file)
@@ -736,13 +729,10 @@ with tab1:
         st.markdown("---")
         st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
-            try:
-                df = pd.read_csv(attendance_file, skiprows=2)
-                if not df.empty:
-                    st.dataframe(df, use_container_width=True)
-                else:
-                    st.info("No attendance marked yet today")
-            except (pd.errors.EmptyDataError, KeyError):
+            df = pd.read_csv(attendance_file)
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+            else:
                 st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")
@@ -835,16 +825,13 @@ with tab2:
             attendance_file = f"attendance_{date_str}.csv"
             
             if os.path.exists(attendance_file):
-                try:
-                    df_temp = pd.read_csv(attendance_file, skiprows=2)
-                    for _, row in df_temp.iterrows():
-                        name = row['Name']
-                        all_people.add(name)
-                        if name not in monthly_data_raw:
-                            monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
-                        monthly_data_raw[name]['present_dates'].append(date_str)
-                except pd.errors.EmptyDataError:
-                    pass  # Skip empty files
+                df_temp = pd.read_csv(attendance_file)
+                for _, row in df_temp.iterrows():
+                    name = row['Name']
+                    all_people.add(name)
+                    if name not in monthly_data_raw:
+                        monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
+                    monthly_data_raw[name]['present_dates'].append(date_str)
         
         # Calculate absent dates
         for day in range(1, num_days + 1):
