@@ -537,7 +537,7 @@ with st.sidebar:
         st.metric("Today's Attendance", len(df))
 
 # Main tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person", "⚙️ Settings"])
+tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person"])
 
 # Tab 1: Live Recognition
 with tab1:
@@ -1083,109 +1083,3 @@ with tab4:
         st.markdown("### Current People in Dataset")
         for person in sorted(people_list):
             st.text(f"• {person}")
-
-# Tab 5: Settings
-with tab5:
-    st.subheader("⚙️ Email Configuration")
-    
-    st.markdown("""
-    ### Configure Email Settings
-    
-    To enable automatic email reports, set the following environment variables or Streamlit secrets:
-    
-    **Required Environment Variables:**
-    - `SENDER_EMAIL` - Your email address (e.g., your-email@gmail.com)
-    - `SENDER_PASSWORD` - Your email password or app password
-    - `RECIPIENT_EMAIL` - Where to send reports (can be same as sender)
-    - `SMTP_SERVER` (optional) - Default: smtp.gmail.com
-    - `SMTP_PORT` (optional) - Default: 587
-    
-    **For Gmail users:**
-    1. Enable 2-Factor Authentication on your Google account
-    2. Generate an App Password: https://myaccount.google.com/apppasswords
-    3. Use the generated 16-character password as `SENDER_PASSWORD`
-    
-    **For Streamlit Cloud:**
-    Add to `.streamlit/secrets.toml`:
-    ```toml
-    SENDER_EMAIL = "your-email@gmail.com"
-    SENDER_PASSWORD = "your-app-password"
-    RECIPIENT_EMAIL = "recipient@example.com"
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 587
-    ```
-    """)
-    
-    st.markdown("---")
-    
-    st.markdown("### Test Email Configuration")
-    
-    if st.button("🔍 Test Email Settings", use_container_width=True):
-        with st.spinner("Testing email configuration..."):
-            success, message = test_email_config()
-            if success:
-                st.success(message)
-            else:
-                st.error(message)
-    
-    st.markdown("---")
-    
-    st.markdown("### Automatic Daily Email Scheduler")
-    
-    st.info("""
-    **How to Set Up Automatic Daily Emails:**
-    
-    For **local deployment** (Windows):
-    1. Create a batch file `send_daily_attendance.bat`:
-    ```batch
-    @echo off
-    python -c "import subprocess; subprocess.run(['python', 'mail_scheduler.py'])"
-    ```
-    
-    2. Open Windows Task Scheduler
-    3. Create a new task to run the batch file daily at your desired time
-    
-    For **Streamlit Cloud**:
-    - Use a cron job or external scheduler service (e.g., GitHub Actions)
-    - Or manually send reports from the Attendance Records tab
-    
-    **Alternative: Manual Sending**
-    - Go to "📋 Attendance Records" tab
-    - Select the date/month
-    - Click "📧 Send to Email" button
-    """)
-    
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### Current Configuration")
-        config = get_email_config()
-        
-        if config and all(config.values()):
-            st.success("✅ Email is configured")
-            with st.expander("View Configuration"):
-                st.write(f"**Sender:** {config['sender_email']}")
-                st.write(f"**Recipient:** {config['recipient_email']}")
-                st.write(f"**SMTP Server:** {config['smtp_server']}")
-                st.write(f"**SMTP Port:** {config['smtp_port']}")
-        else:
-            st.warning("⚠️ Email is not fully configured")
-            st.write("Missing configuration variables:")
-            if not config:
-                st.write("- Unable to load configuration")
-            else:
-                if not config.get('sender_email'):
-                    st.write("- SENDER_EMAIL")
-                if not config.get('sender_password'):
-                    st.write("- SENDER_PASSWORD")
-                if not config.get('recipient_email'):
-                    st.write("- RECIPIENT_EMAIL")
-    
-    with col2:
-        st.markdown("### Quick Links")
-        st.markdown("""
-        - [Gmail App Passwords](https://myaccount.google.com/apppasswords)
-        - [Streamlit Secrets Documentation](https://docs.streamlit.io/develop/concepts/connections/secrets-management)
-        - [Windows Task Scheduler Guide](https://www.windowscentral.com/how-create-automated-task-using-task-scheduler-windows-10)
-        """)
