@@ -269,18 +269,21 @@ def get_monthly_attendance_summary(year, month):
         attendance_file = f"attendance_{date_str}.csv"
         
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file, skiprows=2)
-            for _, row in df.iterrows():
-                name = row['Name']
-                all_people.add(name)
-                if name not in monthly_data:
-                    monthly_data[name] = {
-                        'Days Present': 0,
-                        'Present Dates': [],
-                        'Absent Dates': []
-                    }
-                monthly_data[name]['Days Present'] += 1
-                monthly_data[name]['Present Dates'].append(date_str)
+            try:
+                df = pd.read_csv(attendance_file, skiprows=2)
+                for _, row in df.iterrows():
+                    name = row['Name']
+                    all_people.add(name)
+                    if name not in monthly_data:
+                        monthly_data[name] = {
+                            'Days Present': 0,
+                            'Present Dates': [],
+                            'Absent Dates': []
+                        }
+                    monthly_data[name]['Days Present'] += 1
+                    monthly_data[name]['Present Dates'].append(date_str)
+            except pd.errors.EmptyDataError:
+                pass  # Skip empty files
     
     # Second pass: identify absent dates for each person
     for day in range(1, num_days + 1):
@@ -414,7 +417,11 @@ def send_daily_email_auto():
             return  # Email not configured
         
         # Read and send today's attendance
-        df = pd.read_csv(attendance_file, skiprows=2)
+        try:
+            df = pd.read_csv(attendance_file, skiprows=2)
+        except pd.errors.EmptyDataError:
+            return  # No data in file
+        
         if df.empty:
             return
         
@@ -592,8 +599,11 @@ with st.sidebar:
     attendance_file = f"attendance_{today}.csv"
     
     if os.path.exists(attendance_file):
-        df = pd.read_csv(attendance_file, skiprows=2)
-        st.metric("Today's Attendance", len(df))
+        try:
+            df = pd.read_csv(attendance_file, skiprows=2)
+            st.metric("Today's Attendance", len(df))
+        except pd.errors.EmptyDataError:
+            st.metric("Today's Attendance", 0)
 
 # Main tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person"])
@@ -722,9 +732,14 @@ with tab1:
         st.markdown("---")
         st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file, skiprows=2)
-            if not df.empty:
-                st.dataframe(df, use_container_width=True)
+            try:
+                df = pd.read_csv(attendance_file, skiprows=2)
+                if not df.empty:
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("No attendance marked yet today")
+            except pd.errors.EmptyDataError:
+                st.info("No attendance marked yet today")
             else:
                 st.info("No attendance marked yet today")
         else:
@@ -818,13 +833,16 @@ with tab2:
             attendance_file = f"attendance_{date_str}.csv"
             
             if os.path.exists(attendance_file):
-                df_temp = pd.read_csv(attendance_file, skiprows=2)
-                for _, row in df_temp.iterrows():
-                    name = row['Name']
-                    all_people.add(name)
-                    if name not in monthly_data_raw:
-                        monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
-                    monthly_data_raw[name]['present_dates'].append(date_str)
+                try:
+                    df_temp = pd.read_csv(attendance_file, skiprows=2)
+                    for _, row in df_temp.iterrows():
+                        name = row['Name']
+                        all_people.add(name)
+                        if name not in monthly_data_raw:
+                            monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
+                        monthly_data_raw[name]['present_dates'].append(date_str)
+                except pd.errors.EmptyDataError:
+                    pass  # Skip empty files
         
         # Calculate absent dates
         for day in range(1, num_days + 1):
