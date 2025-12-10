@@ -738,9 +738,7 @@ with tab1:
                     st.dataframe(df, use_container_width=True)
                 else:
                     st.info("No attendance marked yet today")
-            except pd.errors.EmptyDataError:
-                st.info("No attendance marked yet today")
-            else:
+            except (pd.errors.EmptyDataError, KeyError):
                 st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")

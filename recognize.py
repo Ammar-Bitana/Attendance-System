@@ -4,6 +4,7 @@ import cv2
 import torch
 import numpy as np
 from datetime import datetime
+import pytz
 from facenet_pytorch import InceptionResnetV1, MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
 import csv
@@ -127,16 +128,19 @@ today = datetime.now().strftime("%Y-%m-%d")
 attendance_file = f"attendance_{today}.csv"
 
 # Load existing attendance records
-attendance_records = {}  # Format: {name: {'Morning': time or None, 'Evening': time or None}}
+attendance_records = {}  # Format: {name: {'In-Time': time or None, 'Out-Time': time or None}}
 
 if os.path.exists(attendance_file):
     import pandas as pd
-    df = pd.read_csv(attendance_file, skiprows=2)
-    for _, row in df.iterrows():
-        name = row['Name']
-        morning_time = None if pd.isna(row['Morning']) or row['Morning'] == 'NA' else row['Morning']
-        evening_time = None if pd.isna(row['Evening']) or row['Evening'] == 'NA' else row['Evening']
-        attendance_records[name] = {'Morning': morning_time, 'Evening': evening_time}
+    try:
+        df = pd.read_csv(attendance_file, skiprows=2)
+        for _, row in df.iterrows():
+            name = row['Name']
+            intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
+            outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
+            attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
+    except (pd.errors.EmptyDataError, KeyError):
+        pass  # Skip if file is empty or columns don't exist
 else:
     # Create new CSV file with headers
     with open(attendance_file, "w", newline="") as f:
@@ -144,14 +148,18 @@ else:
         writer.writerow(["Name", "Morning", "Evening"])
 
 def save_attendance_to_csv():
-    """Save all attendance records to CSV"""
+    """Save all attendance records to CSV with date at top"""
+    ist = pytz.timezone('Asia/Kolkata')
+    today = datetime.now(ist).strftime("%Y-%m-%d")
     with open(attendance_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Name", "Morning", "Evening"])
+        writer.writerow([f"Date: {today}"])
+        writer.writerow([])  # Empty row for spacing
+        writer.writerow(["Name", "In-Time", "Out-Time"])
         for name, sessions in attendance_records.items():
-            morning = sessions['Morning'] if sessions['Morning'] else 'NA'
-            evening = sessions['Evening'] if sessions['Evening'] else 'NA'
-            writer.writerow([name, morning, evening])
+            intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
+            outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
+            writer.writerow([name, intime, outtime])
 
 print("📹 Starting real-time recognition... Press 'q' to quit")
 
@@ -189,16 +197,16 @@ while True:
 
                     # Mark attendance
                     if name != "Unknown":
-                        current_time = datetime.now()
+                        current_time = datetime.now(pytz.timezone('Asia/Kolkata'))
                         time_now = current_time.strftime("%H:%M:%S")
                         hour = current_time.hour
                         
-                        # Determine session: Morning (before 2 PM) or Evening (2 PM onwards)
-                        session = "Morning" if hour < 14 else "Evening"
+                        # Determine session: In-Time (before 2 PM) or Out-Time (2 PM onwards)
+                        session = "In-Time" if hour < 14 else "Out-Time"
                         
                         # Initialize record if person not seen today
                         if name not in attendance_records:
-                            attendance_records[name] = {'Morning': None, 'Evening': None}
+                            attendance_records[name] = {'In-Time': None, 'Out-Time': None}
                         
                         # Mark attendance only if this session hasn't been marked yet
                         if not attendance_records[name][session]:
