@@ -528,14 +528,22 @@ def get_attendance_records(attendance_file):
     attendance_records = {}
     if os.path.exists(attendance_file):
         try:
+            # Check if file is empty
+            if os.path.getsize(attendance_file) == 0:
+                return attendance_records
+            
             df = pd.read_csv(attendance_file)
+            if df.empty:
+                return attendance_records
+                
             for _, row in df.iterrows():
                 name = row['Name']
                 intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
                 outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
                 attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
-        except (pd.errors.EmptyDataError, KeyError):
-            pass  # Skip if file is empty or columns don't exist
+        except Exception:
+            # Return empty dict on any error
+            pass
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
@@ -687,26 +695,22 @@ with tab1:
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Initialize attendance file
+                                    # Initialize attendance file if it doesn't exist
                                     if not os.path.exists(attendance_file):
                                         with open(attendance_file, "w", newline="") as f:
                                             writer = csv.writer(f)
                                             writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
-                                    try:
-                                        attendance_records = get_attendance_records(attendance_file)
-                                        
-                                        # Try to mark attendance
-                                        marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
-                                        
-                                        if marked:
-                                            st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
-                                            recognized = True
-                                        else:
-                                            st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
-                                            recognized = True
-                                    except Exception as csv_error:
-                                        st.warning(f"✅ **{name}** recognized but couldn't record attendance. Please try again.")
+                                    attendance_records = get_attendance_records(attendance_file)
+                                    
+                                    # Try to mark attendance
+                                    marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
+                                    
+                                    if marked:
+                                        st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
+                                        recognized = True
+                                    else:
+                                        st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
                                         recognized = True
                                 else:
                                     st.error("❌ Face not recognized. Please try again or contact admin.")
@@ -727,12 +731,16 @@ with tab1:
         st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
             try:
-                df = pd.read_csv(attendance_file)
-                if not df.empty:
-                    st.dataframe(df, use_container_width=True)
+                # Check if file is empty
+                if os.path.getsize(attendance_file) > 0:
+                    df = pd.read_csv(attendance_file)
+                    if not df.empty:
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.info("No attendance marked yet today")
                 else:
                     st.info("No attendance marked yet today")
-            except (pd.errors.EmptyDataError, KeyError):
+            except Exception:
                 st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")
