@@ -386,6 +386,58 @@ def test_email_config():
     except Exception as e:
         return False, f"❌ Connection error: {str(e)}"
 
+def send_daily_email_auto():
+    """Automatically send daily attendance email at end of day"""
+    ist = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(ist)
+    current_hour = current_time.hour
+    
+    # Send email at 5 PM (17:00) every day
+    if current_hour != 17:
+        return  # Not the right time yet
+    
+    # Check if we already sent email today
+    email_log_file = f"email_sent_{current_time.strftime('%Y-%m-%d')}.txt"
+    if os.path.exists(email_log_file):
+        return  # Already sent today
+    
+    # Get today's attendance file
+    today = current_time.strftime('%Y-%m-%d')
+    attendance_file = f"attendance_{today}.csv"
+    
+    if not os.path.exists(attendance_file):
+        return  # No attendance data yet
+    
+    try:
+        config = get_email_config()
+        if not config or not all(config.values()):
+            return  # Email not configured
+        
+        # Read and send today's attendance
+        df = pd.read_csv(attendance_file)
+        if df.empty:
+            return
+        
+        csv_data = df.to_csv(index=False)
+        success, message = send_attendance_email(
+            recipient_email=config['recipient_email'],
+            subject=f"Daily Attendance Report - {today}",
+            csv_data=csv_data,
+            csv_filename=attendance_file,
+            sender_email=config['sender_email'],
+            sender_password=config['sender_password'],
+            smtp_server=config['smtp_server'],
+            smtp_port=config['smtp_port']
+        )
+        
+        if success:
+            # Mark that we sent email today
+            with open(email_log_file, 'w') as f:
+                f.write(f"Email sent at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    except Exception as e:
+        pass  # Silently fail to not interrupt user experience
+
 def get_file_hash(filepath):
     """Get hash of file to detect changes"""
     with open(filepath, 'rb') as f:
@@ -516,6 +568,9 @@ def mark_attendance(name, attendance_file, attendance_records):
     return False, session, time_now
 
 # UI
+# Check if it's time to send daily email (at 5 PM)
+send_daily_email_auto()
+
 st.title("📸 Attendance System")
 st.markdown("---")
 
