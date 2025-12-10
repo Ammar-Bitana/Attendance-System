@@ -75,7 +75,7 @@ def send_daily_attendance_email():
     
     try:
         # Read attendance file
-        df = pd.read_csv(attendance_file)
+        df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
         
         if df.empty:
             print(f"ℹ️  No attendance records for {today}")
@@ -169,13 +169,16 @@ def send_monthly_attendance_email():
             attendance_file = f"attendance_{date_str}.csv"
             
             if os.path.exists(attendance_file):
-                df_temp = pd.read_csv(attendance_file)
-                for _, row in df_temp.iterrows():
-                    name = row['Name']
-                    all_people.add(name)
-                    if name not in monthly_data:
-                        monthly_data[name] = {'present_dates': [], 'absent_dates': []}
-                    monthly_data[name]['present_dates'].append(date_str)
+                try:
+                    df_temp = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
+                    for _, row in df_temp.iterrows():
+                        name = row['Name']
+                        all_people.add(name)
+                        if name not in monthly_data:
+                            monthly_data[name] = {'present_dates': [], 'absent_dates': []}
+                        monthly_data[name]['present_dates'].append(date_str)
+                except Exception:
+                    pass  # Skip files that can't be read
         
         # Calculate absent dates
         for day in range(1, num_days + 1):

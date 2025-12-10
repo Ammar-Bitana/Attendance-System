@@ -269,18 +269,21 @@ def get_monthly_attendance_summary(year, month):
         attendance_file = f"attendance_{date_str}.csv"
         
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file)
-            for _, row in df.iterrows():
-                name = row['Name']
-                all_people.add(name)
-                if name not in monthly_data:
-                    monthly_data[name] = {
-                        'Days Present': 0,
-                        'Present Dates': [],
-                        'Absent Dates': []
-                    }
-                monthly_data[name]['Days Present'] += 1
-                monthly_data[name]['Present Dates'].append(date_str)
+            try:
+                df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
+                for _, row in df.iterrows():
+                    name = row['Name']
+                    all_people.add(name)
+                    if name not in monthly_data:
+                        monthly_data[name] = {
+                            'Days Present': 0,
+                            'Present Dates': [],
+                            'Absent Dates': []
+                        }
+                    monthly_data[name]['Days Present'] += 1
+                    monthly_data[name]['Present Dates'].append(date_str)
+            except Exception:
+                pass  # Skip files that can't be read
     
     # Second pass: identify absent dates for each person
     for day in range(1, num_days + 1):
@@ -532,7 +535,7 @@ def get_attendance_records(attendance_file):
             if os.path.getsize(attendance_file) == 0:
                 return attendance_records
             
-            df = pd.read_csv(attendance_file)
+            df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
             if df.empty:
                 return attendance_records
                 
@@ -547,9 +550,13 @@ def get_attendance_records(attendance_file):
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
-    """Save all attendance records to CSV"""
+    """Save all attendance records to CSV with date"""
     with open(attendance_file, "w", newline="") as f:
         writer = csv.writer(f)
+        # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
+        date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
+        writer.writerow([f"Attendance Date: {date_str}"])
+        writer.writerow([])  # Empty row for spacing
         writer.writerow(["Name", "In-Time", "Out-Time"])
         for name, sessions in attendance_records.items():
             intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
@@ -733,7 +740,7 @@ with tab1:
             try:
                 # Check if file is empty
                 if os.path.getsize(attendance_file) > 0:
-                    df = pd.read_csv(attendance_file)
+                    df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
                     if not df.empty:
                         st.dataframe(df, use_container_width=True)
                     else:
@@ -833,13 +840,16 @@ with tab2:
             attendance_file = f"attendance_{date_str}.csv"
             
             if os.path.exists(attendance_file):
-                df_temp = pd.read_csv(attendance_file)
-                for _, row in df_temp.iterrows():
-                    name = row['Name']
-                    all_people.add(name)
-                    if name not in monthly_data_raw:
-                        monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
-                    monthly_data_raw[name]['present_dates'].append(date_str)
+                try:
+                    df_temp = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
+                    for _, row in df_temp.iterrows():
+                        name = row['Name']
+                        all_people.add(name)
+                        if name not in monthly_data_raw:
+                            monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
+                        monthly_data_raw[name]['present_dates'].append(date_str)
+                except Exception:
+                    pass  # Skip files that can't be read
         
         # Calculate absent dates
         for day in range(1, num_days + 1):
