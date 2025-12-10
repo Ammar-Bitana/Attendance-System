@@ -26,12 +26,6 @@ wheels/
 # Streamlit
 .streamlit/secrets.toml
 
-# Data files (keep private)
-dataset/*/
-!dataset/.gitkeep
-attendance_*.csv
-face_encodings_cache.pkl
-
 # IDEs
 .vscode/
 .idea/
@@ -50,3 +44,6 @@ Thumbs.db
 test_*.py
 temp/
 tmp/
+
+# Note: dataset/, attendance CSVs, and cache are committed for persistence
+# Make your GitHub repo PRIVATE to protect this data
