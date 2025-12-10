@@ -387,14 +387,14 @@ def test_email_config():
         return False, f"❌ Connection error: {str(e)}"
 
 def send_daily_email_auto():
-    """Automatically send daily attendance email at end of day"""
+    """Automatically send daily attendance email anytime after 4 PM"""
     ist = pytz.timezone('Asia/Kolkata')
     current_time = datetime.now(ist)
     current_hour = current_time.hour
     
-    # Send email at 5 PM (17:00) every day
-    if current_hour != 17:
-        return  # Not the right time yet
+    # Send email anytime after 4 PM (16:00) every day
+    if current_hour < 16:
+        return  # Too early, before 4 PM
     
     # Check if we already sent email today
     email_log_file = f"email_sent_{current_time.strftime('%Y-%m-%d')}.txt"
