@@ -393,7 +393,7 @@ def send_daily_email_auto():
     current_hour = current_time.hour
     
     # Send email anytime after 4 PM (16:00) every day
-    if current_hour < 16:
+    if current_hour < 20:
         return  # Too early, before 4 PM
     
     # Check if we already sent email today
