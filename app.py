@@ -528,7 +528,7 @@ def get_attendance_records(attendance_file):
     attendance_records = {}
     if os.path.exists(attendance_file):
         try:
-            df = pd.read_csv(attendance_file, skiprows=2)
+            df = pd.read_csv(attendance_file)
             for _, row in df.iterrows():
                 name = row['Name']
                 intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
@@ -539,13 +539,9 @@ def get_attendance_records(attendance_file):
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
-    """Save all attendance records to CSV with date at top"""
+    """Save all attendance records to CSV"""
     with open(attendance_file, "w", newline="") as f:
         writer = csv.writer(f)
-        # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
-        date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
-        writer.writerow([f"Date: {date_str}"])
-        writer.writerow([])  # Empty row for spacing
         writer.writerow(["Name", "In-Time", "Out-Time"])
         for name, sessions in attendance_records.items():
             intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
@@ -691,14 +687,10 @@ with tab1:
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Initialize attendance file with date header
+                                    # Initialize attendance file
                                     if not os.path.exists(attendance_file):
                                         with open(attendance_file, "w", newline="") as f:
                                             writer = csv.writer(f)
-                                            ist = pytz.timezone('Asia/Kolkata')
-                                            today = datetime.now(ist).strftime("%Y-%m-%d")
-                                            writer.writerow([f"Date: {today}"])
-                                            writer.writerow([])  # Empty row
                                             writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
                                     attendance_records = get_attendance_records(attendance_file)
