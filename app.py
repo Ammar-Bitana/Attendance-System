@@ -17,6 +17,8 @@ import streamlit.components.v1 as components
 import base64
 import zipfile
 import io
+import subprocess
+import shutil
 
 # Page config
 st.set_page_config(
@@ -110,13 +112,65 @@ if 'names' not in st.session_state:
 # Page config
 st.set_page_config(
     page_title="Attendance System",
-    page_icon="📸",
     layout="wide"
 )
 
 # Initialize session state
 dataset_path = 'dataset'
 cache_file = 'face_encodings_cache.pkl'
+
+# Git sync functions for persistent storage
+def git_sync_enabled():
+    """Check if we're running on Streamlit Cloud"""
+    return os.path.exists('/mount/src')
+
+def git_pull():
+    """Pull latest data from GitHub"""
+    if git_sync_enabled():
+        try:
+            subprocess.run(['git', 'pull', 'origin', 'main'], 
+                         capture_output=True, check=False, cwd='/mount/src/attendance-system')
+        except:
+            pass
+
+def git_push_changes(message="Auto-sync data"):
+    """Push changes to GitHub"""
+    if git_sync_enabled():
+        try:
+            repo_path = '/mount/src/attendance-system'
+            
+            # Get GitHub token from secrets
+            github_token = st.secrets.get("GITHUB_TOKEN", "")
+            if not github_token:
+                return  # Skip if no token configured
+            
+            # Configure git
+            subprocess.run(['git', 'config', 'user.email', 'streamlit-app@auto-sync.com'], 
+                         cwd=repo_path, capture_output=True)
+            subprocess.run(['git', 'config', 'user.name', 'Streamlit App'], 
+                         cwd=repo_path, capture_output=True)
+            
+            # Add files
+            subprocess.run(['git', 'add', 'dataset/', '*.csv', '*.pkl'], 
+                         cwd=repo_path, capture_output=True, check=False)
+            
+            # Commit
+            result = subprocess.run(['git', 'commit', '-m', message], 
+                         cwd=repo_path, capture_output=True, check=False)
+            
+            # Only push if there are changes
+            if result.returncode == 0:
+                # Use token for authentication
+                remote_url = f"https://{github_token}@github.com/Samarth-143/Attendance-System.git"
+                subprocess.run(['git', 'push', remote_url, 'main'], 
+                             cwd=repo_path, capture_output=True, check=False, timeout=10)
+        except Exception as e:
+            pass  # Silently fail to not interrupt user experience
+
+# Pull latest data on startup
+if git_sync_enabled() and 'initial_sync' not in st.session_state:
+    git_pull()
+    st.session_state.initial_sync = True
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Functions
@@ -233,6 +287,9 @@ def save_attendance_to_csv(attendance_file, attendance_records):
             morning = sessions['Morning'] if sessions['Morning'] else 'NA'
             evening = sessions['Evening'] if sessions['Evening'] else 'NA'
             writer.writerow([name, morning, evening])
+    
+    # Sync to GitHub after saving
+    git_push_changes(f"Update attendance: {attendance_file}")
 
 def mark_attendance(name, attendance_file, attendance_records):
     """Mark attendance for a person"""
@@ -489,6 +546,9 @@ with tab3:
                     st.success(f"✅ Successfully captured 50 photos for {person_name}!")
                     st.info("The system will automatically refresh encodings.")
                     st.session_state.embeddings = None
+                    
+                    # Sync to GitHub
+                    git_push_changes(f"Add person: {person_name}")
                 else:
                     st.error("Please enter a person name")
         else:
@@ -520,6 +580,9 @@ with tab3:
                                 st.success(f"✅ Successfully added {person_name}!")
                                 st.balloons()
                                 st.session_state.embeddings = None  # Refresh encodings
+                                
+                                # Sync to GitHub
+                                git_push_changes(f"Add person: {person_name}")
                             except Exception as e:
                                 st.error(f"Error extracting ZIP: {str(e)}")
                 else:
@@ -571,6 +634,9 @@ with tab3:
                     else:
                         st.success(f"🎉 All 50 photos captured for {person_name}!")
                         st.balloons()
+                        
+                        # Sync to GitHub
+                        git_push_changes(f"Add person: {person_name}")
                         
                         # Reset and refresh
                         st.session_state.embeddings = None
@@ -650,6 +716,10 @@ with tab4:
                             if removed_count > 0:
                                 st.success(f"📋 Removed attendance records from {removed_count} file(s)")
                             st.info("The encodings will be refreshed automatically.")
+                            
+                            # Sync to GitHub
+                            git_push_changes(f"Remove person: {person_to_remove}")
+                            
                             time.sleep(2)
                             st.rerun()
                         except Exception as e:
