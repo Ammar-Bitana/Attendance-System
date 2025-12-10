@@ -393,7 +393,7 @@ def send_daily_email_auto():
     current_hour = current_time.hour
     
     # Send email anytime after 4 PM (16:00) every day
-    if current_hour < 20:
+    if current_hour < 21:
         return  # Too early, before 4 PM
     
     # Check if we already sent email today
@@ -536,9 +536,13 @@ def get_attendance_records(attendance_file):
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
-    """Save all attendance records to CSV"""
+    """Save all attendance records to CSV with date at top"""
     with open(attendance_file, "w", newline="") as f:
         writer = csv.writer(f)
+        # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
+        date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
+        writer.writerow([f"Date: {date_str}"])
+        writer.writerow([])  # Empty row for spacing
         writer.writerow(["Name", "In-Time", "Out-Time"])
         for name, sessions in attendance_records.items():
             intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
