@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import torch
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from facenet_pytorch import InceptionResnetV1, MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
@@ -19,6 +19,12 @@ import zipfile
 import io
 import subprocess
 import shutil
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import glob
 
 # Page config
 st.set_page_config(
@@ -340,20 +346,20 @@ def get_attendance_records(attendance_file):
         df = pd.read_csv(attendance_file)
         for _, row in df.iterrows():
             name = row['Name']
-            morning_time = None if pd.isna(row['Morning']) or row['Morning'] == 'NA' else row['Morning']
-            evening_time = None if pd.isna(row['Evening']) or row['Evening'] == 'NA' else row['Evening']
-            attendance_records[name] = {'Morning': morning_time, 'Evening': evening_time}
+            in_time = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
+            out_time = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
+            attendance_records[name] = {'In-Time': in_time, 'Out-Time': out_time}
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
     """Save all attendance records to CSV"""
     with open(attendance_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Name", "Morning", "Evening"])
+        writer.writerow(["Name", "In-Time", "Out-Time"])
         for name, sessions in attendance_records.items():
-            morning = sessions['Morning'] if sessions['Morning'] else 'NA'
-            evening = sessions['Evening'] if sessions['Evening'] else 'NA'
-            writer.writerow([name, morning, evening])
+            in_time = sessions['In-Time'] if sessions['In-Time'] else 'NA'
+            out_time = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
+            writer.writerow([name, in_time, out_time])
     
     # Sync to GitHub after saving
     git_push_changes(f"Update attendance: {attendance_file}")
@@ -366,16 +372,97 @@ def mark_attendance(name, attendance_file, attendance_records):
     time_now = current_time.strftime("%H:%M:%S")
     hour = current_time.hour
     
-    session = "Morning" if hour < 14 else "Evening"
+    session = "In-Time" if hour < 14 else "Out-Time"
     
     if name not in attendance_records:
-        attendance_records[name] = {'Morning': None, 'Evening': None}
+        attendance_records[name] = {'In-Time': None, 'Out-Time': None}
     
     if not attendance_records[name][session]:
         attendance_records[name][session] = time_now
         save_attendance_to_csv(attendance_file, attendance_records)
         return True, session, time_now
     return False, session, time_now
+
+def send_daily_attendance_email(date_str, recipient_email):
+    """Send daily attendance report via email"""
+    try:
+        # Get email credentials from secrets
+        sender_email = st.secrets.get("EMAIL_ADDRESS", "")
+        sender_password = st.secrets.get("EMAIL_PASSWORD", "")
+        
+        if not sender_email or not sender_password:
+            return False, "Email credentials not configured"
+        
+        attendance_file = f"attendance_{date_str}.csv"
+        if not os.path.exists(attendance_file):
+            return False, "No attendance file for this date"
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+        msg['Subject'] = f"Daily Attendance Report - {date_str}"
+        
+        body = f"Please find attached the attendance report for {date_str}."
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Attach CSV file
+        with open(attendance_file, 'rb') as f:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename={attendance_file}')
+            msg.attach(part)
+        
+        # Send email
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        
+        return True, "Email sent successfully"
+    except Exception as e:
+        return False, str(e)
+
+def generate_monthly_report(month, year):
+    """Generate monthly attendance report for each person"""
+    # Find all attendance files for the given month
+    pattern = f"attendance_{year}-{month:02d}-*.csv"
+    files = glob.glob(pattern)
+    
+    if not files:
+        return None
+    
+    # Combine all daily attendance
+    all_data = []
+    for file in sorted(files):
+        df = pd.read_csv(file)
+        date = file.replace('attendance_', '').replace('.csv', '')
+        df['Date'] = date
+        all_data.append(df)
+    
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    # Create summary for each person
+    summary = []
+    for person in combined_df['Name'].unique():
+        person_data = combined_df[combined_df['Name'] == person]
+        total_days = len(person_data)
+        in_marked = person_data['In-Time'].ne('NA').sum()
+        out_marked = person_data['Out-Time'].ne('NA').sum()
+        both_marked = ((person_data['In-Time'] != 'NA') & (person_data['Out-Time'] != 'NA')).sum()
+        
+        summary.append({
+            'Name': person,
+            'Total Days': total_days,
+            'In-Time Marked': in_marked,
+            'Out-Time Marked': out_marked,
+            'Full Days': both_marked
+        })
+    
+    summary_df = pd.DataFrame(summary)
+    return summary_df, combined_df
 
 # UI
 st.title("📸 Attendance System")
@@ -399,7 +486,7 @@ with st.sidebar:
         st.metric("Today's Attendance", len(df))
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📹 Live Recognition", "📋 Attendance Records", "➕ Add New Person", "🗑️ Remove Person", "📧 Email Reports"])
 
 # Tab 1: Live Recognition
 with tab1:
@@ -495,7 +582,7 @@ with tab1:
                                     if not os.path.exists(attendance_file):
                                         with open(attendance_file, "w", newline="") as f:
                                             writer = csv.writer(f)
-                                            writer.writerow(["Name", "Morning", "Evening"])
+                                            writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
                                     attendance_records = get_attendance_records(attendance_file)
                                     
@@ -554,9 +641,9 @@ with tab2:
         with col2:
             st.metric("Unique People", df['Name'].nunique())
         with col3:
-            morning_present = df['Morning'].ne('NA').sum()
-            evening_present = df['Evening'].ne('NA').sum()
-            st.metric("Morning / Evening", f"{morning_present} / {evening_present}")
+            in_present = df['In-Time'].ne('NA').sum()
+            out_present = df['Out-Time'].ne('NA').sum()
+            st.metric("In / Out", f"{in_present} / {out_present}")
         
         st.dataframe(df, use_container_width=True)
         
@@ -798,3 +885,82 @@ with tab4:
         st.markdown("### Current People in Dataset")
         for person in sorted(people_list):
             st.text(f"• {person}")
+
+# Tab 5: Email Reports
+with tab5:
+    st.subheader("📧 Email Reports")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Daily Report")
+        recipient_email = st.text_input("Recipient Email", placeholder="example@gmail.com")
+        date_to_send = st.date_input("Select Date", datetime.now(pytz.timezone('Asia/Kolkata')))
+        
+        if st.button("📤 Send Daily Report", use_container_width=True, type="primary"):
+            if recipient_email:
+                date_str = date_to_send.strftime("%Y-%m-%d")
+                with st.spinner("Sending email..."):
+                    success, message = send_daily_attendance_email(date_str, recipient_email)
+                    if success:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.error(f"❌ {message}")
+            else:
+                st.warning("Please enter recipient email")
+    
+    with col2:
+        st.markdown("### Monthly Report")
+        col_month, col_year = st.columns(2)
+        with col_month:
+            month = st.selectbox("Month", range(1, 13), index=datetime.now().month - 1)
+        with col_year:
+            year = st.number_input("Year", min_value=2020, max_value=2030, value=datetime.now().year)
+        
+        if st.button("📊 Generate Monthly Report", use_container_width=True):
+            with st.spinner("Generating report..."):
+                result = generate_monthly_report(month, year)
+                if result:
+                    summary_df, detailed_df = result
+                    
+                    st.markdown(f"#### Summary for {month}/{year}")
+                    st.dataframe(summary_df, use_container_width=True)
+                    
+                    # Download summary
+                    csv_summary = summary_df.to_csv(index=False)
+                    st.download_button(
+                        "📥 Download Summary",
+                        csv_summary,
+                        f"monthly_summary_{year}_{month:02d}.csv",
+                        "text/csv",
+                        use_container_width=True
+                    )
+                    
+                    with st.expander("📋 View Detailed Records"):
+                        st.dataframe(detailed_df, use_container_width=True)
+                        csv_detailed = detailed_df.to_csv(index=False)
+                        st.download_button(
+                            "📥 Download Detailed Records",
+                            csv_detailed,
+                            f"monthly_detailed_{year}_{month:02d}.csv",
+                            "text/csv"
+                        )
+                else:
+                    st.info(f"No attendance records found for {month}/{year}")
+    
+    st.markdown("---")
+    st.info("""
+    **Email Setup Instructions:**
+    
+    To enable email reports, add these to Streamlit Cloud secrets:
+    ```
+    EMAIL_ADDRESS = "your-email@gmail.com"
+    EMAIL_PASSWORD = "your-app-password"
+    ```
+    
+    For Gmail, use an App Password (not your regular password):
+    1. Go to Google Account → Security
+    2. Enable 2-Step Verification
+    3. Generate App Password for "Mail"
+    4. Use that password in secrets
+    """)
