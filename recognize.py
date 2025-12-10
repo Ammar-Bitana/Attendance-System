@@ -131,7 +131,7 @@ attendance_records = {}  # Format: {name: {'Morning': time or None, 'Evening': t
 
 if os.path.exists(attendance_file):
     import pandas as pd
-    df = pd.read_csv(attendance_file)
+    df = pd.read_csv(attendance_file, skiprows=2)
     for _, row in df.iterrows():
         name = row['Name']
         morning_time = None if pd.isna(row['Morning']) or row['Morning'] == 'NA' else row['Morning']

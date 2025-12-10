@@ -269,7 +269,7 @@ def get_monthly_attendance_summary(year, month):
         attendance_file = f"attendance_{date_str}.csv"
         
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file)
+            df = pd.read_csv(attendance_file, skiprows=2)
             for _, row in df.iterrows():
                 name = row['Name']
                 all_people.add(name)
@@ -414,7 +414,7 @@ def send_daily_email_auto():
             return  # Email not configured
         
         # Read and send today's attendance
-        df = pd.read_csv(attendance_file)
+        df = pd.read_csv(attendance_file, skiprows=2)
         if df.empty:
             return
         
@@ -527,7 +527,7 @@ def get_attendance_records(attendance_file):
     """Load existing attendance records"""
     attendance_records = {}
     if os.path.exists(attendance_file):
-        df = pd.read_csv(attendance_file)
+        df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
         for _, row in df.iterrows():
             name = row['Name']
             intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
@@ -592,7 +592,7 @@ with st.sidebar:
     attendance_file = f"attendance_{today}.csv"
     
     if os.path.exists(attendance_file):
-        df = pd.read_csv(attendance_file)
+        df = pd.read_csv(attendance_file, skiprows=2)
         st.metric("Today's Attendance", len(df))
 
 # Main tabs
@@ -722,7 +722,7 @@ with tab1:
         st.markdown("---")
         st.subheader("📋 Today's Attendance")
         if os.path.exists(attendance_file):
-            df = pd.read_csv(attendance_file)
+            df = pd.read_csv(attendance_file, skiprows=2)
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
             else:
@@ -818,7 +818,7 @@ with tab2:
             attendance_file = f"attendance_{date_str}.csv"
             
             if os.path.exists(attendance_file):
-                df_temp = pd.read_csv(attendance_file)
+                df_temp = pd.read_csv(attendance_file, skiprows=2)
                 for _, row in df_temp.iterrows():
                     name = row['Name']
                     all_people.add(name)
