@@ -698,10 +698,14 @@ with tab1:
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Initialize attendance file
+                                    # Initialize attendance file with proper headers
                                     if not os.path.exists(attendance_file):
                                         with open(attendance_file, "w", newline="") as f:
                                             writer = csv.writer(f)
+                                            ist = pytz.timezone('Asia/Kolkata')
+                                            today = datetime.now(ist).strftime("%Y-%m-%d")
+                                            writer.writerow([f"Date: {today}"])
+                                            writer.writerow([])  # Empty row for spacing
                                             writer.writerow(["Name", "In-Time", "Out-Time"])
                                     
                                     attendance_records = get_attendance_records(attendance_file)
