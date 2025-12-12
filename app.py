@@ -771,7 +771,7 @@ with tab2:
         selected_file = f"attendance_{date_filter.strftime('%Y-%m-%d')}.csv"
         
         if os.path.exists(selected_file):
-            df = pd.read_csv(selected_file)
+            df = pd.read_csv(selected_file, skiprows=2)  # Skip date row and empty row
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -788,7 +788,9 @@ with tab2:
             # Download and Email buttons
             col1, col2 = st.columns(2)
             with col1:
-                csv_data = df.to_csv(index=False)
+                # Read the original file with date header for download
+                with open(selected_file, 'r') as f:
+                    csv_data = f.read()
                 st.download_button(
                     label="📥 Download CSV",
                     data=csv_data,
@@ -800,7 +802,9 @@ with tab2:
                 if st.button("📧 Send to Email", key="send_daily_email"):
                     config = get_email_config()
                     if config and all(config.values()):
-                        csv_data = df.to_csv(index=False)
+                        # Read the original file with date header for email
+                        with open(selected_file, 'r') as f:
+                            csv_data = f.read()
                         success, message = send_attendance_email(
                             recipient_email=config['recipient_email'],
                             subject=f"Daily Attendance Report - {date_filter.strftime('%Y-%m-%d')}",
@@ -908,7 +912,12 @@ with tab2:
             # Download and Email buttons
             col1, col2 = st.columns(2)
             with col1:
-                csv_data = monthly_df.to_csv(index=False)
+                # Create CSV with date header
+                csv_lines = [f"Monthly Attendance Report: {selected_month.strftime('%B %Y')}\n"]
+                csv_lines.append("\n")  # Empty line
+                csv_lines.append(monthly_df.to_csv(index=False))
+                csv_data = "".join(csv_lines)
+                
                 st.download_button(
                     label="📥 Download Monthly Summary",
                     data=csv_data,
@@ -920,7 +929,12 @@ with tab2:
                 if st.button("📧 Send to Email", key="send_monthly_email"):
                     config = get_email_config()
                     if config and all(config.values()):
-                        csv_data = monthly_df.to_csv(index=False)
+                        # Create CSV with date header
+                        csv_lines = [f"Monthly Attendance Report: {selected_month.strftime('%B %Y')}\n"]
+                        csv_lines.append("\n")  # Empty line
+                        csv_lines.append(monthly_df.to_csv(index=False))
+                        csv_data = "".join(csv_lines)
+                        
                         success, message = send_attendance_email(
                             recipient_email=config['recipient_email'],
                             subject=f"Monthly Attendance Report - {selected_month.strftime('%B %Y')}",
