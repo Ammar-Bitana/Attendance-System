@@ -763,42 +763,34 @@ with tab1:
                                 if sim_score > recognition_threshold:
                                     name = st.session_state.names[idx]
                                     
-                                    # Check if already recognized in this session
-                                    ist = pytz.timezone('Asia/Kolkata')
-                                    current_hour = datetime.now(ist).hour
-                                    session_key = f"{name}_{current_hour < 16}"  # True for morning, False for evening
-                                    
-                                    if session_key in st.session_state.recognized_today:
-                                        # Already marked in this session, skip
-                                        cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                        cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
-                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                                        recognized = True
-                                        continue
-                                    
                                     # Draw rectangle on image
                                     cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Get current date for attendance
+                                    # Check if already recognized in this session
                                     ist = pytz.timezone('Asia/Kolkata')
-                                    today = datetime.now(ist).strftime("%Y-%m-%d")
+                                    current_hour = datetime.now(ist).hour
+                                    session_key = f"{name}_{current_hour < 16}"  # True for morning, False for evening
                                     
-                                    # Load existing attendance records
-                                    attendance_records = get_attendance_records(today)
+                                    if session_key not in st.session_state.recognized_today:
+                                        # Not yet marked in this session, mark now
+                                        today = datetime.now(ist).strftime("%Y-%m-%d")
+                                        
+                                        # Load existing attendance records
+                                        attendance_records = get_attendance_records(today)
+                                        
+                                        # Try to mark attendance
+                                        marked, session, time_mark = mark_attendance(name, today, attendance_records)
+                                        
+                                        if marked:
+                                            st.session_state.recognized_today.add(session_key)  # Add to recognized set
+                                            st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
+                                        else:
+                                            st.session_state.recognized_today.add(session_key)  # Already marked in CSV, add to set
+                                            st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
                                     
-                                    # Try to mark attendance
-                                    marked, session, time_mark = mark_attendance(name, today, attendance_records)
-                                    
-                                    if marked:
-                                        st.session_state.recognized_today.add(session_key)  # Add to recognized set
-                                        st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
-                                        recognized = True
-                                    else:
-                                        st.session_state.recognized_today.add(session_key)  # Already marked in CSV, add to set
-                                        st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
-                                        recognized = True
+                                    recognized = True
                                 else:
                                     st.error("❌ Face not recognized. Please try again or contact admin.")
                         except Exception as e:
