@@ -592,10 +592,26 @@ def get_attendance_records(date_str):
 
 def save_attendance_to_csv(date_str, attendance_records):
     """Save all attendance records to separate CSV files by role"""
-    # Separate records by role
+    # Get all people from dataset
+    all_people = {}
+    if os.path.exists(dataset_path):
+        for person_dir in os.listdir(dataset_path):
+            if os.path.isdir(os.path.join(dataset_path, person_dir)):
+                role = get_person_role(person_dir)
+                all_people[person_dir] = role
+    
+    # Separate records by role, including people not yet marked
     staff_records = {}
     worker_records = {}
     
+    # First add all people from dataset with NA values
+    for name, role in all_people.items():
+        if role == "Staff":
+            staff_records[name] = {'In-Time': None, 'Out-Time': None}
+        elif role == "Worker":
+            worker_records[name] = {'In-Time': None, 'Out-Time': None}
+    
+    # Then update with actual attendance records
     for name, sessions in attendance_records.items():
         role = get_person_role(name)
         if role == "Staff":
@@ -611,7 +627,8 @@ def save_attendance_to_csv(date_str, attendance_records):
             writer.writerow([f"Attendance Date: {date_str}"])
             writer.writerow([])  # Empty row for spacing
             writer.writerow(["Name", "Role", "In-Time", "Out-Time"])
-            for name, sessions in staff_records.items():
+            for name in sorted(staff_records.keys()):
+                sessions = staff_records[name]
                 intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
                 outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
                 writer.writerow([name, "Staff", intime, outtime])
@@ -624,7 +641,8 @@ def save_attendance_to_csv(date_str, attendance_records):
             writer.writerow([f"Attendance Date: {date_str}"])
             writer.writerow([])  # Empty row for spacing
             writer.writerow(["Name", "Role", "In-Time", "Out-Time"])
-            for name, sessions in worker_records.items():
+            for name in sorted(worker_records.keys()):
+                sessions = worker_records[name]
                 intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
                 outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
                 writer.writerow([name, "Worker", intime, outtime])
