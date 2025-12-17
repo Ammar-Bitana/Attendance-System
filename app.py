@@ -20,6 +20,7 @@ import io
 import subprocess
 import shutil
 import smtplib
+import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -190,6 +191,30 @@ st.set_page_config(
 # Initialize session state
 dataset_path = 'dataset'
 cache_file = 'face_encodings_cache.pkl'
+roles_file = 'person_roles.json'
+
+# Role management functions
+def load_person_roles():
+    """Load person roles from JSON file"""
+    if os.path.exists(roles_file):
+        try:
+            with open(roles_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_person_role(name, role):
+    """Save a person's role"""
+    roles = load_person_roles()
+    roles[name] = role
+    with open(roles_file, 'w') as f:
+        json.dump(roles, f, indent=2)
+
+def get_person_role(name):
+    """Get a person's role"""
+    roles = load_person_roles()
+    return roles.get(name, "Unknown")
 
 # Git sync functions for persistent storage
 def git_sync_enabled():
@@ -223,7 +248,7 @@ def git_push_changes(message="Auto-sync data"):
                          cwd=repo_path, capture_output=True)
             
             # Add files
-            subprocess.run(['git', 'add', 'dataset/', '*.csv', '*.pkl'], 
+            subprocess.run(['git', 'add', 'dataset/', '*.csv', '*.pkl', '*.json'], 
                          cwd=repo_path, capture_output=True, check=False)
             
             # Commit
@@ -266,23 +291,24 @@ def get_monthly_attendance_summary(year, month):
     # First pass: collect all people who appear in any attendance file and track present days
     for day in range(1, num_days + 1):
         date_str = f"{year:04d}-{month:02d}-{day:02d}"
-        attendance_file = f"attendance_{date_str}.csv"
         
-        if os.path.exists(attendance_file):
-            try:
-                df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
-                for _, row in df.iterrows():
-                    name = row['Name']
-                    all_people.add(name)
-                    if name not in monthly_data:
-                        monthly_data[name] = {
-                            'Days Present': 0,
-                            'Present Dates': [],
-                            'Absent Dates': []
-                        }
-                    monthly_data[name]['Days Present'] += 1
-                    monthly_data[name]['Present Dates'].append(date_str)
-            except Exception:
+        # Check both staff and worker files
+        for file_pattern in [f"attendance_staff_{date_str}.csv", f"attendance_worker_{date_str}.csv"]:
+            if os.path.exists(file_pattern):
+                try:
+                    df = pd.read_csv(file_pattern, skiprows=2)  # Skip date row and empty row
+                    for _, row in df.iterrows():
+                        name = row['Name']
+                        all_people.add(name)
+                        if name not in monthly_data:
+                            monthly_data[name] = {
+                                'Days Present': 0,
+                                'Present Dates': [],
+                                'Absent Dates': []
+                            }
+                        monthly_data[name]['Days Present'] += 1
+                        monthly_data[name]['Present Dates'].append(date_str)
+                except Exception:
                 pass  # Skip files that can't be read
     
     # Second pass: identify absent dates for each person
@@ -550,21 +576,49 @@ def get_attendance_records(attendance_file):
     return attendance_records
 
 def save_attendance_to_csv(attendance_file, attendance_records):
-    """Save all attendance records to CSV with date"""
-    with open(attendance_file, "w", newline="") as f:
-        writer = csv.writer(f)
-        # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
-        date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
-        writer.writerow([f"Attendance Date: {date_str}"])
-        writer.writerow([])  # Empty row for spacing
-        writer.writerow(["Name", "In-Time", "Out-Time"])
-        for name, sessions in attendance_records.items():
-            intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
-            outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
-            writer.writerow([name, intime, outtime])
+    """Save all attendance records to separate CSV files by role"""
+    # Separate records by role
+    staff_records = {}
+    worker_records = {}
+    
+    for name, sessions in attendance_records.items():
+        role = get_person_role(name)
+        if role == "Staff":
+            staff_records[name] = sessions
+        elif role == "Worker":
+            worker_records[name] = sessions
+    
+    # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
+    date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
+    
+    # Save staff file
+    if staff_records:
+        staff_file = f"attendance_staff_{date_str}.csv"
+        with open(staff_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([f"Attendance Date: {date_str}"])
+            writer.writerow([])  # Empty row for spacing
+            writer.writerow(["Name", "Role", "In-Time", "Out-Time"])
+            for name, sessions in staff_records.items():
+                intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
+                outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
+                writer.writerow([name, "Staff", intime, outtime])
+    
+    # Save worker file
+    if worker_records:
+        worker_file = f"attendance_worker_{date_str}.csv"
+        with open(worker_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([f"Attendance Date: {date_str}"])
+            writer.writerow([])  # Empty row for spacing
+            writer.writerow(["Name", "Role", "In-Time", "Out-Time"])
+            for name, sessions in worker_records.items():
+                intime = sessions['In-Time'] if sessions['In-Time'] else 'NA'
+                outtime = sessions['Out-Time'] if sessions['Out-Time'] else 'NA'
+                writer.writerow([name, "Worker", intime, outtime])
     
     # Sync to GitHub after saving
-    git_push_changes(f"Update attendance: {attendance_file}")
+    git_push_changes(f"Update attendance: {date_str}")
 
 def mark_attendance(name, attendance_file, attendance_records):
     """Mark attendance for a person"""
@@ -736,19 +790,41 @@ with tab1:
         # Show recent attendance
         st.markdown("---")
         st.subheader("📋 Today's Attendance")
-        if os.path.exists(attendance_file):
+        
+        # Check for both staff and worker files
+        ist = pytz.timezone('Asia/Kolkata')
+        today = datetime.now(ist).strftime("%Y-%m-%d")
+        staff_file_today = f"attendance_staff_{today}.csv"
+        worker_file_today = f"attendance_worker_{today}.csv"
+        
+        has_data = False
+        
+        # Display staff attendance
+        if os.path.exists(staff_file_today):
             try:
-                # Check if file is empty
-                if os.path.getsize(attendance_file) > 0:
-                    df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
-                    if not df.empty:
-                        st.dataframe(df, use_container_width=True)
-                    else:
-                        st.info("No attendance marked yet today")
-                else:
-                    st.info("No attendance marked yet today")
+                if os.path.getsize(staff_file_today) > 0:
+                    df_staff = pd.read_csv(staff_file_today, skiprows=2)
+                    if not df_staff.empty:
+                        st.markdown("**Staff:**")
+                        st.dataframe(df_staff, use_container_width=True)
+                        has_data = True
             except Exception:
-                st.info("No attendance marked yet today")
+                pass
+        
+        # Display worker attendance
+        if os.path.exists(worker_file_today):
+            try:
+                if os.path.getsize(worker_file_today) > 0:
+                    df_worker = pd.read_csv(worker_file_today, skiprows=2)
+                    if not df_worker.empty:
+                        st.markdown("**Worker:**")
+                        st.dataframe(df_worker, use_container_width=True)
+                        has_data = True
+            except Exception:
+                pass
+        
+        if not has_data:
+            st.info("No attendance marked yet today")
         else:
             st.info("No attendance records yet")
     else:
@@ -767,62 +843,78 @@ with tab2:
         col1, col2 = st.columns([1, 1])
         with col1:
             date_filter = st.date_input("Select Date", datetime.now(pytz.timezone('Asia/Kolkata')), key="daily_date")
+        with col2:
+            role_filter = st.selectbox("View", ["All", "Staff Only", "Worker Only"])
         
-        selected_file = f"attendance_{date_filter.strftime('%Y-%m-%d')}.csv"
+        date_str = date_filter.strftime('%Y-%m-%d')
+        staff_file = f"attendance_staff_{date_str}.csv"
+        worker_file = f"attendance_worker_{date_str}.csv"
         
-        if os.path.exists(selected_file):
-            df = pd.read_csv(selected_file, skiprows=2)  # Skip date row and empty row
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Entries", len(df))
-            with col2:
-                st.metric("Unique People", df['Name'].nunique())
-            with col3:
-                intime_present = df['In-Time'].ne('NA').sum()
-                outtime_present = df['Out-Time'].ne('NA').sum()
-                st.metric("In-Time / Out-Time", f"{intime_present} / {outtime_present}")
-            
-            st.dataframe(df, use_container_width=True)
-            
-            # Download and Email buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                # Read the original file with date header for download
-                with open(selected_file, 'r') as f:
-                    csv_data = f.read()
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=csv_data,
-                    file_name=selected_file,
-                    mime="text/csv"
-                )
-            
-            with col2:
-                if st.button("📧 Send to Email", key="send_daily_email"):
-                    config = get_email_config()
-                    if config and all(config.values()):
-                        # Read the original file with date header for email
-                        with open(selected_file, 'r') as f:
-                            csv_data = f.read()
-                        success, message = send_attendance_email(
-                            recipient_email=config['recipient_email'],
-                            subject=f"Daily Attendance Report - {date_filter.strftime('%Y-%m-%d')}",
-                            csv_data=csv_data,
-                            csv_filename=selected_file,
-                            sender_email=config['sender_email'],
-                            sender_password=config['sender_password'],
-                            smtp_server=config['smtp_server'],
-                            smtp_port=config['smtp_port']
-                        )
-                        if success:
-                            st.success(message)
+        # Determine which files to show
+        files_to_show = []
+        if role_filter in ["All", "Staff Only"] and os.path.exists(staff_file):
+            files_to_show.append(("Staff", staff_file))
+        if role_filter in ["All", "Worker Only"] and os.path.exists(worker_file):
+            files_to_show.append(("Worker", worker_file))
+        
+        if files_to_show:
+            for role_name, file_path in files_to_show:
+                st.markdown(f"#### {role_name} Attendance")
+                df = pd.read_csv(file_path, skiprows=2)  # Skip date row and empty row
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Entries", len(df))
+                with col2:
+                    st.metric("Unique People", df['Name'].nunique())
+                with col3:
+                    intime_present = df['In-Time'].ne('NA').sum()
+                    outtime_present = df['Out-Time'].ne('NA').sum()
+                    st.metric("In-Time / Out-Time", f"{intime_present} / {outtime_present}")
+                
+                st.dataframe(df, use_container_width=True)
+                
+                # Download and Email buttons for this role
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Read the original file with date header for download
+                    with open(file_path, 'r') as f:
+                        csv_data = f.read()
+                    st.download_button(
+                        label=f"📥 Download {role_name} CSV",
+                        data=csv_data,
+                        file_name=file_path,
+                        mime="text/csv",
+                        key=f"download_{role_name}"
+                    )
+                
+                with col2:
+                    if st.button(f"📧 Send {role_name} to Email", key=f"send_{role_name}_email"):
+                        config = get_email_config()
+                        if config and all(config.values()):
+                            # Read the original file with date header for email
+                            with open(file_path, 'r') as f:
+                                csv_data = f.read()
+                            success, message = send_attendance_email(
+                                recipient_email=config['recipient_email'],
+                                subject=f"{role_name} Attendance Report - {date_str}",
+                                csv_data=csv_data,
+                                csv_filename=file_path,
+                                sender_email=config['sender_email'],
+                                sender_password=config['sender_password'],
+                                smtp_server=config['smtp_server'],
+                                smtp_port=config['smtp_port']
+                            )
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
                         else:
-                            st.error(message)
-                    else:
-                        st.error("❌ Email not configured. Please set SENDER_EMAIL, SENDER_PASSWORD, RECIPIENT_EMAIL environment variables or Streamlit secrets.")
+                            st.error("❌ Email not configured.")
+                
+                st.markdown("---")  # Separator between staff and worker sections
         else:
-            st.info(f"No attendance records for {date_filter.strftime('%Y-%m-%d')}")
+            st.info(f"No attendance records for {date_str}")
     
     else:  # Monthly Attendance
         st.markdown("### 📊 Monthly Attendance Summary")
@@ -838,22 +930,23 @@ with tab2:
         num_days = monthrange(selected_month.year, selected_month.month)[1]
         all_people = set()
         
-        # Collect attendance data
+        # Collect attendance data from both staff and worker files
         for day in range(1, num_days + 1):
             date_str = f"{selected_month.year:04d}-{selected_month.month:02d}-{day:02d}"
-            attendance_file = f"attendance_{date_str}.csv"
             
-            if os.path.exists(attendance_file):
-                try:
-                    df_temp = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
-                    for _, row in df_temp.iterrows():
-                        name = row['Name']
-                        all_people.add(name)
-                        if name not in monthly_data_raw:
-                            monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
-                        monthly_data_raw[name]['present_dates'].append(date_str)
-                except Exception:
-                    pass  # Skip files that can't be read
+            # Check both staff and worker files
+            for file_pattern in [f"attendance_staff_{date_str}.csv", f"attendance_worker_{date_str}.csv"]:
+                if os.path.exists(file_pattern):
+                    try:
+                        df_temp = pd.read_csv(file_pattern, skiprows=2)  # Skip date row and empty row
+                        for _, row in df_temp.iterrows():
+                            name = row['Name']
+                            all_people.add(name)
+                            if name not in monthly_data_raw:
+                                monthly_data_raw[name] = {'present_dates': [], 'absent_dates': []}
+                            monthly_data_raw[name]['present_dates'].append(date_str)
+                    except Exception:
+                        pass  # Skip files that can't be read
         
         # Calculate absent dates
         for day in range(1, num_days + 1):
@@ -962,6 +1055,7 @@ with tab3:
     
     with col1:
         person_name = st.text_input("Person Name")
+        person_role = st.selectbox("Role", ["Staff", "Worker"])
         
         # Check if running locally (has webcam access)
         is_local = not os.path.exists('/mount/src')
@@ -973,6 +1067,9 @@ with tab3:
                 if person_name:
                     person_dir = os.path.join(dataset_path, person_name)
                     os.makedirs(person_dir, exist_ok=True)
+                    
+                    # Save role
+                    save_person_role(person_name, person_role)
                     
                     cap = cv2.VideoCapture(0)
                     st.info("Capturing 50 photos... Please look at the camera!")
@@ -1026,6 +1123,9 @@ with tab3:
                             try:
                                 with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
                                     zip_ref.extractall(person_dir)
+                                
+                                # Save role
+                                save_person_role(person_name, person_role)
                                 
                                 st.success(f"✅ Successfully added {person_name}!")
                                 st.balloons()
@@ -1082,6 +1182,9 @@ with tab3:
                             
                             st.rerun()
                     else:
+                        # Save role
+                        save_person_role(person_name, person_role)
+                        
                         st.success(f"🎉 All 50 photos captured for {person_name}!")
                         st.balloons()
                         
