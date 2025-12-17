@@ -1007,26 +1007,42 @@ with tab2:
             
             st.markdown("---")
             
-            # Create separate DataFrames for staff and workers
-            staff_summary = []
-            worker_summary = []
+            # Create separate DataFrames for staff and workers with day-by-day format
+            staff_data = {}
+            worker_data = {}
             
-            for name in sorted(monthly_data_raw.keys()):
-                data = monthly_data_raw[name]
+            # Separate people by role
+            for name in monthly_data_raw.keys():
                 role = get_person_role(name)
-                absent_str = ', '.join(sorted(data['absent_dates'])) if data['absent_dates'] else 'No absences'
-                summary_item = {
-                    'Name': name,
-                    'Days Present': len(data['present_dates']),
-                    'Absent Dates': absent_str
-                }
                 if role == "Staff":
-                    staff_summary.append(summary_item)
+                    staff_data[name] = monthly_data_raw[name]
                 elif role == "Worker":
-                    worker_summary.append(summary_item)
+                    worker_data[name] = monthly_data_raw[name]
             
-            staff_df = pd.DataFrame(staff_summary) if staff_summary else pd.DataFrame()
-            worker_df = pd.DataFrame(worker_summary) if worker_summary else pd.DataFrame()
+            # Function to create day-by-day DataFrame
+            def create_monthly_df(people_data, num_days, selected_month):
+                if not people_data:
+                    return pd.DataFrame()
+                
+                rows = []
+                for name in sorted(people_data.keys()):
+                    data = people_data[name]
+                    row = {'S.No': len(rows) + 1, 'Person Name': name, 'Role': get_person_role(name)}
+                    
+                    # Add each day's status
+                    for day in range(1, num_days + 1):
+                        date_str = f"{selected_month.year:04d}-{selected_month.month:02d}-{day:02d}"
+                        row[str(day)] = 'P' if date_str in data['present_dates'] else 'A'
+                    
+                    # Add total counts
+                    row['Total P Days'] = len(data['present_dates'])
+                    row['Total A Days'] = len(data['absent_dates'])
+                    rows.append(row)
+                
+                return pd.DataFrame(rows)
+            
+            staff_df = create_monthly_df(staff_data, num_days, selected_month)
+            worker_df = create_monthly_df(worker_data, num_days, selected_month)
             
             # Staff Download and Email
             if not staff_df.empty:
