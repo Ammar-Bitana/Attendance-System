@@ -1262,9 +1262,27 @@ with tab3:
             if os.path.exists(dataset_path):
                 people_list = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
                 if people_list:
-                    st.markdown("### Registered People")
-                    for person in sorted(people_list):
-                        st.text(f"• {person}")
+                    st.markdown("### Current People in Dataset")
+                    
+                    # Separate by role
+                    staff_list = []
+                    worker_list = []
+                    for person in people_list:
+                        role = get_person_role(person)
+                        if role == "Staff":
+                            staff_list.append(person)
+                        elif role == "Worker":
+                            worker_list.append(person)
+                    
+                    if staff_list:
+                        st.markdown("**Staff:**")
+                        for person in sorted(staff_list):
+                            st.text(f"• {person}")
+                    
+                    if worker_list:
+                        st.markdown("**Worker:**")
+                        for person in sorted(worker_list):
+                            st.text(f"• {person}")
 
 # Tab 4: Remove Person
 with tab4:
@@ -1337,5 +1355,23 @@ with tab4:
     
     if people_list:
         st.markdown("### Current People in Dataset")
-        for person in sorted(people_list):
-            st.text(f"• {person}")
+        
+        # Separate by role
+        staff_list = []
+        worker_list = []
+        for person in people_list:
+            role = get_person_role(person)
+            if role == "Staff":
+                staff_list.append(person)
+            elif role == "Worker":
+                worker_list.append(person)
+        
+        if staff_list:
+            st.markdown("**Staff:**")
+            for person in sorted(staff_list):
+                st.text(f"• {person}")
+        
+        if worker_list:
+            st.markdown("**Worker:**")
+            for person in sorted(worker_list):
+                st.text(f"• {person}")
