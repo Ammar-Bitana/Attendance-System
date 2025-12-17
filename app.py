@@ -309,7 +309,7 @@ def get_monthly_attendance_summary(year, month):
                         monthly_data[name]['Days Present'] += 1
                         monthly_data[name]['Present Dates'].append(date_str)
                 except Exception:
-                pass  # Skip files that can't be read
+                    pass  # Skip files that can't be read
     
     # Second pass: identify absent dates for each person
     for day in range(1, num_days + 1):
