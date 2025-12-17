@@ -554,30 +554,43 @@ def load_face_encodings(mtcnn, resnet):
     
     return np.vstack(embeddings), names
 
-def get_attendance_records(attendance_file):
-    """Load existing attendance records"""
+def get_attendance_records(date_str):
+    """Load existing attendance records from both staff and worker files"""
     attendance_records = {}
-    if os.path.exists(attendance_file):
+    
+    # Load from staff file
+    staff_file = f"attendance_staff_{date_str}.csv"
+    if os.path.exists(staff_file):
         try:
-            # Check if file is empty
-            if os.path.getsize(attendance_file) == 0:
-                return attendance_records
-            
-            df = pd.read_csv(attendance_file, skiprows=2)  # Skip date row and empty row
-            if df.empty:
-                return attendance_records
-                
-            for _, row in df.iterrows():
-                name = row['Name']
-                intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
-                outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
-                attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
+            if os.path.getsize(staff_file) > 0:
+                df = pd.read_csv(staff_file, skiprows=2)  # Skip date row and empty row
+                if not df.empty:
+                    for _, row in df.iterrows():
+                        name = row['Name']
+                        intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
+                        outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
+                        attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
         except Exception:
-            # Return empty dict on any error
             pass
+    
+    # Load from worker file
+    worker_file = f"attendance_worker_{date_str}.csv"
+    if os.path.exists(worker_file):
+        try:
+            if os.path.getsize(worker_file) > 0:
+                df = pd.read_csv(worker_file, skiprows=2)  # Skip date row and empty row
+                if not df.empty:
+                    for _, row in df.iterrows():
+                        name = row['Name']
+                        intime = None if pd.isna(row['In-Time']) or row['In-Time'] == 'NA' else row['In-Time']
+                        outtime = None if pd.isna(row['Out-Time']) or row['Out-Time'] == 'NA' else row['Out-Time']
+                        attendance_records[name] = {'In-Time': intime, 'Out-Time': outtime}
+        except Exception:
+            pass
+    
     return attendance_records
 
-def save_attendance_to_csv(attendance_file, attendance_records):
+def save_attendance_to_csv(date_str, attendance_records):
     """Save all attendance records to separate CSV files by role"""
     # Separate records by role
     staff_records = {}
@@ -589,9 +602,6 @@ def save_attendance_to_csv(attendance_file, attendance_records):
             staff_records[name] = sessions
         elif role == "Worker":
             worker_records[name] = sessions
-    
-    # Extract date from filename (format: attendance_YYYY-MM-DD.csv)
-    date_str = attendance_file.replace("attendance_", "").replace(".csv", "")
     
     # Save staff file
     if staff_records:
@@ -622,7 +632,7 @@ def save_attendance_to_csv(attendance_file, attendance_records):
     # Sync to GitHub after saving
     git_push_changes(f"Update attendance: {date_str}")
 
-def mark_attendance(name, attendance_file, attendance_records):
+def mark_attendance(name, date_str, attendance_records):
     """Mark attendance for a person"""
     # Use Indian timezone (IST - UTC+5:30)
     ist = pytz.timezone('Asia/Kolkata')
@@ -637,7 +647,7 @@ def mark_attendance(name, attendance_file, attendance_records):
     
     if not attendance_records[name][session]:
         attendance_records[name][session] = time_now
-        save_attendance_to_csv(attendance_file, attendance_records)
+        save_attendance_to_csv(date_str, attendance_records)
         return True, session, time_now
     return False, session, time_now
 
@@ -771,16 +781,15 @@ with tab1:
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
                                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                                     
-                                    # Initialize attendance file
-                                    if not os.path.exists(attendance_file):
-                                        with open(attendance_file, "w", newline="") as f:
-                                            writer = csv.writer(f)
-                                            writer.writerow(["Name", "In-Time", "Out-Time"])
+                                    # Get current date for attendance
+                                    ist = pytz.timezone('Asia/Kolkata')
+                                    today = datetime.now(ist).strftime("%Y-%m-%d")
                                     
-                                    attendance_records = get_attendance_records(attendance_file)
+                                    # Load existing attendance records
+                                    attendance_records = get_attendance_records(today)
                                     
                                     # Try to mark attendance
-                                    marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
+                                    marked, session, time_mark = mark_attendance(name, today, attendance_records)
                                     
                                     if marked:
                                         st.session_state.recognized_today.add(session_key)  # Add to recognized set
