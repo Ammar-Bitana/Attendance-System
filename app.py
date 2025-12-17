@@ -989,61 +989,118 @@ with tab2:
             
             st.markdown("---")
             
-            # Create DataFrame for download
-            summary_list = []
+            # Create separate DataFrames for staff and workers
+            staff_summary = []
+            worker_summary = []
+            
             for name in sorted(monthly_data_raw.keys()):
                 data = monthly_data_raw[name]
+                role = get_person_role(name)
                 absent_str = ', '.join(sorted(data['absent_dates'])) if data['absent_dates'] else 'No absences'
-                summary_list.append({
+                summary_item = {
                     'Name': name,
                     'Days Present': len(data['present_dates']),
                     'Absent Dates': absent_str
-                })
+                }
+                if role == "Staff":
+                    staff_summary.append(summary_item)
+                elif role == "Worker":
+                    worker_summary.append(summary_item)
             
-            monthly_df = pd.DataFrame(summary_list)
+            staff_df = pd.DataFrame(staff_summary) if staff_summary else pd.DataFrame()
+            worker_df = pd.DataFrame(worker_summary) if worker_summary else pd.DataFrame()
             
-            # Download and Email buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                # Create CSV with date header
-                csv_lines = [f"Monthly Attendance Report: {selected_month.strftime('%B %Y')}\n"]
-                csv_lines.append("\n")  # Empty line
-                csv_lines.append(monthly_df.to_csv(index=False))
-                csv_data = "".join(csv_lines)
+            # Staff Download and Email
+            if not staff_df.empty:
+                st.markdown("#### Staff Monthly Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Create CSV with date header
+                    csv_lines = [f"Staff Monthly Attendance Report: {selected_month.strftime('%B %Y')}\\n"]
+                    csv_lines.append("\\n")  # Empty line
+                    csv_lines.append(staff_df.to_csv(index=False))
+                    csv_data = "".join(csv_lines)
+                    
+                    st.download_button(
+                        label="📥 Download Staff Monthly Summary",
+                        data=csv_data,
+                        file_name=f"monthly_staff_{selected_month.strftime('%Y-%m')}.csv",
+                        mime="text/csv",
+                        key="download_staff_monthly"
+                    )
                 
-                st.download_button(
-                    label="📥 Download Monthly Summary",
-                    data=csv_data,
-                    file_name=f"monthly_attendance_{selected_month.strftime('%Y-%m')}.csv",
-                    mime="text/csv"
-                )
-            
-            with col2:
-                if st.button("📧 Send to Email", key="send_monthly_email"):
-                    config = get_email_config()
-                    if config and all(config.values()):
-                        # Create CSV with date header
-                        csv_lines = [f"Monthly Attendance Report: {selected_month.strftime('%B %Y')}\n"]
-                        csv_lines.append("\n")  # Empty line
-                        csv_lines.append(monthly_df.to_csv(index=False))
-                        csv_data = "".join(csv_lines)
-                        
-                        success, message = send_attendance_email(
-                            recipient_email=config['recipient_email'],
-                            subject=f"Monthly Attendance Report - {selected_month.strftime('%B %Y')}",
-                            csv_data=csv_data,
-                            csv_filename=f"monthly_attendance_{selected_month.strftime('%Y-%m')}.csv",
-                            sender_email=config['sender_email'],
-                            sender_password=config['sender_password'],
-                            smtp_server=config['smtp_server'],
-                            smtp_port=config['smtp_port']
-                        )
-                        if success:
-                            st.success(message)
+                with col2:
+                    if st.button("📧 Send Staff to Email", key="send_staff_monthly_email"):
+                        config = get_email_config()
+                        if config and all(config.values()):
+                            # Create CSV with date header
+                            csv_lines = [f"Staff Monthly Attendance Report: {selected_month.strftime('%B %Y')}\\n"]
+                            csv_lines.append("\\n")  # Empty line
+                            csv_lines.append(staff_df.to_csv(index=False))
+                            csv_data = "".join(csv_lines)
+                            
+                            success, message = send_attendance_email(
+                                recipient_email=config['recipient_email'],
+                                subject=f"Staff Monthly Attendance Report - {selected_month.strftime('%B %Y')}",
+                                csv_data=csv_data,
+                                csv_filename=f"monthly_staff_{selected_month.strftime('%Y-%m')}.csv",
+                                sender_email=config['sender_email'],
+                                sender_password=config['sender_password'],
+                                smtp_server=config['smtp_server'],
+                                smtp_port=config['smtp_port']
+                            )
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
                         else:
-                            st.error(message)
-                    else:
-                        st.error("❌ Email not configured. Please set SENDER_EMAIL, SENDER_PASSWORD, RECIPIENT_EMAIL environment variables or Streamlit secrets.")
+                            st.error("❌ Email not configured.")
+            
+            # Worker Download and Email
+            if not worker_df.empty:
+                st.markdown("#### Worker Monthly Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Create CSV with date header
+                    csv_lines = [f"Worker Monthly Attendance Report: {selected_month.strftime('%B %Y')}\\n"]
+                    csv_lines.append("\\n")  # Empty line
+                    csv_lines.append(worker_df.to_csv(index=False))
+                    csv_data = "".join(csv_lines)
+                    
+                    st.download_button(
+                        label="📥 Download Worker Monthly Summary",
+                        data=csv_data,
+                        file_name=f"monthly_worker_{selected_month.strftime('%Y-%m')}.csv",
+                        mime="text/csv",
+                        key="download_worker_monthly"
+                    )
+                
+                with col2:
+                    if st.button("📧 Send Worker to Email", key="send_worker_monthly_email"):
+                        config = get_email_config()
+                        if config and all(config.values()):
+                            # Create CSV with date header
+                            csv_lines = [f"Worker Monthly Attendance Report: {selected_month.strftime('%B %Y')}\n"]
+                            csv_lines.append("\n")  # Empty line
+                            csv_lines.append(worker_df.to_csv(index=False))
+                            csv_data = "".join(csv_lines)
+                            
+                            success, message = send_attendance_email(
+                                recipient_email=config['recipient_email'],
+                                subject=f"Worker Monthly Attendance Report - {selected_month.strftime('%B %Y')}",
+                                csv_data=csv_data,
+                                csv_filename=f"monthly_worker_{selected_month.strftime('%Y-%m')}.csv",
+                                sender_email=config['sender_email'],
+                                sender_password=config['sender_password'],
+                                smtp_server=config['smtp_server'],
+                                smtp_port=config['smtp_port']
+                                )
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
+                        else:
+                            st.error("❌ Email not configured.")
         else:
             st.info(f"No attendance records for {selected_month.strftime('%B %Y')}")
 
@@ -1128,7 +1185,6 @@ with tab3:
                                 save_person_role(person_name, person_role)
                                 
                                 st.success(f"✅ Successfully added {person_name}!")
-                                st.balloons()
                                 st.session_state.embeddings = None  # Refresh encodings
                                 
                                 # Sync to GitHub
@@ -1186,7 +1242,6 @@ with tab3:
                         save_person_role(person_name, person_role)
                         
                         st.success(f"🎉 All 50 photos captured for {person_name}!")
-                        st.balloons()
                         
                         # Sync to GitHub
                         git_push_changes(f"Add person: {person_name}")
