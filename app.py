@@ -181,6 +181,8 @@ if 'embeddings' not in st.session_state:
     st.session_state.embeddings = None
 if 'names' not in st.session_state:
     st.session_state.names = None
+if 'recognized_today' not in st.session_state:
+    st.session_state.recognized_today = set()  # Track who's been recognized in this session
 
 # Page config
 st.set_page_config(
@@ -628,7 +630,7 @@ def mark_attendance(name, attendance_file, attendance_records):
     time_now = current_time.strftime("%H:%M:%S")
     hour = current_time.hour
     
-    session = "In-Time" if hour < 14 else "Out-Time"
+    session = "In-Time" if hour < 16 else "Out-Time"
     
     if name not in attendance_records:
         attendance_records[name] = {'In-Time': None, 'Out-Time': None}
@@ -751,6 +753,19 @@ with tab1:
                                 if sim_score > recognition_threshold:
                                     name = st.session_state.names[idx]
                                     
+                                    # Check if already recognized in this session
+                                    ist = pytz.timezone('Asia/Kolkata')
+                                    current_hour = datetime.now(ist).hour
+                                    session_key = f"{name}_{current_hour < 16}"  # True for morning, False for evening
+                                    
+                                    if session_key in st.session_state.recognized_today:
+                                        # Already marked in this session, skip
+                                        cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                        cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                                        recognized = True
+                                        continue
+                                    
                                     # Draw rectangle on image
                                     cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
                                     cv2.putText(img_array, f"{name} ({sim_score:.2f})", (x1, y1 - 10),
@@ -768,9 +783,11 @@ with tab1:
                                     marked, session, time_mark = mark_attendance(name, attendance_file, attendance_records)
                                     
                                     if marked:
+                                        st.session_state.recognized_today.add(session_key)  # Add to recognized set
                                         st.success(f"✅ **{name}** - {session} attendance marked at {time_mark}")
                                         recognized = True
                                     else:
+                                        st.session_state.recognized_today.add(session_key)  # Already marked in CSV, add to set
                                         st.info(f"ℹ️ **{name}** - {session} attendance already marked today")
                                         recognized = True
                                 else:
